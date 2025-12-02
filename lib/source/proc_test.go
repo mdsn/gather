@@ -8,12 +8,20 @@ import (
 	"time"
 )
 
-func consume(src *Source, outC chan []byte) {
+func Consume(src *Source, outC chan []byte) {
 	var out []byte
 	for msg := range src.Out {
 		out = append(out, msg.Bytes...)
 	}
 	outC <- out
+}
+
+func Map[T any, R any](xs []T, f func(T) R) []R {
+	var ys []R
+	for _, x := range xs {
+		ys = append(ys, f(x))
+	}
+	return ys
 }
 
 func NewSpec(id, cmd string, args []string) *Spec {
@@ -72,7 +80,7 @@ func TestAttachProc_RedirectsStdout(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go consume(src, outC)
+	go Consume(src, outC)
 
 	<-src.Done
 
@@ -98,17 +106,15 @@ func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go consume(src, outC)
+	go Consume(src, outC)
 
 	out := <-outC
-	outLines := slices.Collect(strings.Lines(string(out)))
+	outLines := Map(
+		slices.Collect(strings.Lines(string(out))),
+		func(s string) string { return strings.TrimRight(s, "\n") },
+	)
 
-	var outLines2 []string
-	for _, line := range outLines {
-		outLines2 = append(outLines2, strings.TrimRight(line, "\n"))
-	}
-
-	if !slices.Equal(lines, outLines2) {
+	if !slices.Equal(lines, outLines) {
 		t.Fatalf("outLines: %q, want: %q", outLines, lines)
 	}
 }
