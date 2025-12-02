@@ -148,6 +148,23 @@ func TestAttachProc_TruncatesLongLine(t *testing.T) {
 }
 
 func TestAttachProc_LastLineNoNewline(t *testing.T) {
+	ctx := t.Context()
+	want := []string{"abc\n", "def\n", "ghi"}
+	spec := NewSpec("newline", "sh", []string{"-c", "echo abc; echo def; echo -n ghi"})
+
+	src, err := attachProc(ctx, spec)
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	outC := make(chan []byte)
+	go Consume(src, outC)
+
+	out := <-outC
+	lines := slices.Collect(strings.Lines(string(out)))
+	if !slices.Equal(want, lines) {
+		t.Fatalf("lines: %q; want: %q", lines, want)
+	}
 }
 
 func TestAttachProc_CancelContext(t *testing.T) {
