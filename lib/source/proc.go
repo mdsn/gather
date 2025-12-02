@@ -36,7 +36,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 
 	// Create *Source instance
 	src := &Source{
-		Id: spec.Id,
+		Id:   spec.Id,
 		Kind: KindProc,
 		Done: make(chan struct{}),
 		Out:  make(chan Output),

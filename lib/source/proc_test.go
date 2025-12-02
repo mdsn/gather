@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+func consume(src *Source, outC chan []byte) {
+	var out []byte
+	for msg := range src.Out {
+		out = append(out, msg.Bytes...)
+	}
+	outC <- out
+}
+
 func NewSpec(id, cmd string, args []string) *Spec {
 	return &Spec{Id: id, Kind: KindProc, Path: cmd, Args: args}
 }
@@ -51,6 +59,24 @@ func TestAttachProc_FailsCommandNotFound(t *testing.T) {
 }
 
 func TestAttachProc_RedirectsStdout(t *testing.T) {
+	ctx := t.Context()
+	const want = "yes! radiant lyre speak to me become a voice"
+	spec := NewSpec("sappho", "echo", []string{"-n", want})
+
+	src, err := attachProc(ctx, spec)
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	outC := make(chan []byte)
+	go consume(src, outC)
+
+	<-src.Done
+
+	out := <-outC
+	if string(out) != want {
+		t.Fatalf("stdout = '%s', want '%s'", out, want)
+	}
 }
 
 func TestAttachProc_StreamsMultipleLines(t *testing.T) {
