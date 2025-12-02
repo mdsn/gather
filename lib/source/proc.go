@@ -44,7 +44,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 	}
 
 	// Start streaming output into the channel
-	st := Stream(rp, src.Out)
+	st := stream(rp, src.Out)
 
 	// Wait out the process in a goroutine
 	go func() {
@@ -81,19 +81,19 @@ type ProcStream struct {
 	Stop chan struct{}
 }
 
-func Stream(pipe io.ReadCloser, out chan Output) *ProcStream {
+func stream(pipe io.ReadCloser, out chan Output) *ProcStream {
 	st := &ProcStream{
 		Done: make(chan struct{}),
 		Stop: make(chan struct{}),
 	}
 
-	go stream(pipe, out, st.Stop, st.Done)
+	go read(pipe, out, st.Stop, st.Done)
 	go cleanup(pipe, out, st)
 
 	return st
 }
 
-func stream(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- struct{}) {
+func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- struct{}) {
 	// Signal that streaming is done.
 	defer close(done)
 
