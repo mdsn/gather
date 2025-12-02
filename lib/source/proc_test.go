@@ -1,6 +1,7 @@
 package source
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -174,6 +175,26 @@ func TestAttachProc_LastLineNoNewline(t *testing.T) {
 }
 
 func TestAttachProc_CancelContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	spec := NewSpec("terminate", "sh", []string{"-c", "sleep 10; echo hullaballoo"})
+
+	src, _ := attachProc(ctx, spec)
+
+	outC := make(chan []byte)
+	go Consume(src, outC)
+
+	cancel()
+
+	select {
+	case <-src.Done:
+	case <-time.After(time.Second):
+		t.Fatalf("timeout expired")
+	}
+
+	out := <-outC
+	if string(out) != "" {
+		t.Fatalf("unexpected output: %q", string(out))
+	}
 }
 
 func TestAttachProc_ExternalSigterm(t *testing.T) {
