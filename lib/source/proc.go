@@ -99,7 +99,7 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 
 	rd := bufio.NewReader(pipe)
 	for {
-		// This call blocks until the pipe is closed.
+		// This call blocks until the pipe is closed. Includes delimiter.
 		bytes, err := rd.ReadBytes('\n')
 
 		n := len(bytes)

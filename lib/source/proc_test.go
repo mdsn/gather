@@ -1,6 +1,9 @@
 package source
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -80,6 +83,34 @@ func TestAttachProc_RedirectsStdout(t *testing.T) {
 }
 
 func TestAttachProc_StreamsMultipleLines(t *testing.T) {
+	ctx := t.Context()
+	lines := []string{
+		"O God, what great kindness have we done in times past and forgotten it,",
+		"That thou givest this wonder unto us,",
+		"O God of waters?",
+	}
+	cmd := fmt.Sprintf("echo '%s'; echo '%s'; echo '%s'", lines[0], lines[1], lines[2])
+	spec := NewSpec("pound", "sh", []string{"-c", cmd})
+
+	src, err := attachProc(ctx, spec)
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	outC := make(chan []byte)
+	go consume(src, outC)
+
+	out := <-outC
+	outLines := slices.Collect(strings.Lines(string(out)))
+
+	var outLines2 []string
+	for _, line := range outLines {
+		outLines2 = append(outLines2, strings.TrimRight(line, "\n"))
+	}
+
+	if !slices.Equal(lines, outLines2) {
+		t.Fatalf("outLines: %q, want: %q", outLines, lines)
+	}
 }
 
 func TestAttachProc_TruncatesLongLine(t *testing.T) {
