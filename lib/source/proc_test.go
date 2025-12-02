@@ -21,6 +21,12 @@ func TestAttachProc_NoOutput(t *testing.T) {
 	if src == nil {
 		t.Fatalf("src is nil")
 	}
+	if src.Id != "true" {
+		t.Fatal("Id =", src.Id, "wanted true")
+	}
+	if src.Kind != KindProc {
+		t.Fatal("Kind =", src.Kind, "wanted", KindProc)
+	}
 
 	select {
 	case <-src.Done:
