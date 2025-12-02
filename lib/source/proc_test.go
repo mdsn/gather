@@ -109,6 +109,8 @@ func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 	go Consume(src, outC)
 
 	out := <-outC
+	// Lines are forwarded with newline included; strip them for the test since
+	// the input doesn't have them. `echo` adds them.
 	outLines := Map(
 		slices.Collect(strings.Lines(string(out))),
 		func(s string) string { return strings.TrimRight(s, "\n") },
@@ -120,6 +122,29 @@ func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 }
 
 func TestAttachProc_TruncatesLongLine(t *testing.T) {
+	ctx := t.Context()
+	// As of today, bufio.Reader defaultBufSize is 4096. Build a larger string
+	// than that and see that it is truncated.
+	wantLen := maxLineLength
+	strLen := 2 * wantLen
+	alphabet := "a b c u v w x y z ' '"
+	// No newline
+	cmd := fmt.Sprintf("echo -n \"$(shuf -er -n %d %s | tr -d '\\n')\"", strLen, alphabet)
+	spec := NewSpec("long", "sh", []string{"-c", cmd})
+
+	src, err := attachProc(ctx, spec)
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	outC := make(chan []byte)
+	go Consume(src, outC)
+
+	out := <-outC
+	outStr := string(out)
+	if len(outStr) != wantLen {
+		t.Fatalf("len(outStr) = %d, want: %d\noutStr: '%s'", len(outStr), wantLen, outStr)
+	}
 }
 
 func TestAttachProc_LastLineNoNewline(t *testing.T) {

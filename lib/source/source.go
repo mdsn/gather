@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	maxLineLength = 4096
+)
+
 type SourceKind uint8
 
 const (

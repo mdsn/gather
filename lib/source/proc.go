@@ -3,6 +3,7 @@ package source
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -97,16 +98,18 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 	// Signal that streaming is done.
 	defer close(done)
 
-	rd := bufio.NewReader(pipe)
+	rd := bufio.NewReaderSize(pipe, maxLineLength)
 	for {
 		// This call blocks until the pipe is closed. Includes delimiter.
-		bytes, err := rd.ReadBytes('\n')
+		bytes, err := rd.ReadSlice('\n')
 
 		n := len(bytes)
 		if n > 0 {
 			cp := make([]byte, n)
 			copy(cp, bytes[:n])
 
+			// TODO signal truncation if ErrBufferFull; output can indicate
+			// with ellipsis.
 			msg := Output{CapturedAt: time.Now(), Bytes: cp}
 
 			// Preempt writing if a Stop signal arrived.
@@ -117,7 +120,13 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 			}
 		}
 
-		if err == io.EOF {
+		// The buffer filled before reaching newline. Discard the rest of the
+		// line.
+		for errors.Is(bufio.ErrBufferFull, err) {
+			_, err = rd.ReadSlice('\n')
+		}
+
+		if errors.Is(io.EOF, err) {
 			return
 		}
 
