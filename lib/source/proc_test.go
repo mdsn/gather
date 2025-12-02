@@ -205,4 +205,17 @@ func TestAttachProc_MultipleSources(t *testing.T) {
 }
 
 func TestAttachProc_ChildKeepsPipeOpen(t *testing.T) {
+	ctx := t.Context()
+	streamGracePeriod = 50 * time.Millisecond
+	// sh spawns sleep in the background then exits; sleep inherits the write
+	// end of the pipe and keeps it open
+	spec := NewSpec("fork", "sh", []string{"-c", "sleep 1000 &"})
+
+	src, _ := attachProc(ctx, spec)
+
+	select {
+	case <-src.Done:
+	case <-time.After(time.Second):
+		t.Fatalf("timeout expired")
+	}
 }

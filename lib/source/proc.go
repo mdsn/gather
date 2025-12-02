@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+var (
+	streamGracePeriod = time.Second
+)
+
 func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 	cmd := exec.CommandContext(ctx, spec.Path, spec.Args...)
 
@@ -48,7 +52,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 	st := stream(rp, src.Out)
 
 	// Wait out the process in a goroutine
-	go func() {
+	go func(grace time.Duration) {
 		defer close(src.Done)
 
 		// TODO report this error?
@@ -60,7 +64,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 		case <-ctx.Done():
 			close(st.Stop)
 		default:
-			timer := time.NewTimer(time.Second)
+			timer := time.NewTimer(grace)
 			defer timer.Stop()
 			select {
 			case <-st.Done:
@@ -72,7 +76,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 
 		<-st.Done
 		// TODO possibly build a "exit status" for the source
-	}()
+	}(streamGracePeriod)
 
 	return src, nil
 }
