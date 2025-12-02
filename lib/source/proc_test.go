@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -202,6 +203,41 @@ func TestAttachProc_CancelContext(t *testing.T) {
 }
 
 func TestAttachProc_MultipleSources(t *testing.T) {
+	ctx := t.Context()
+	const want = 6
+	spec1 := NewSpec("fst", "sh", []string{"-c", "echo one; echo two; echo three"})
+	spec2 := NewSpec("snd", "sh", []string{"-c", "echo 111; echo 222; echo 33333"})
+
+	src1, _ := attachProc(ctx, spec1)
+	src2, _ := attachProc(ctx, spec2)
+
+	outC := make(chan Output)
+	consume := func(procOut chan Output) {
+		for msg := range procOut {
+			outC <- msg
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() { consume(src1.Out) })
+	wg.Go(func() { consume(src2.Out) })
+
+	go func() {
+		wg.Wait()
+		close(outC)
+	}()
+
+	var msgs []Output
+	for msg := range outC {
+		msgs = append(msgs, msg)
+	}
+
+	<-src1.Done
+	<-src2.Done
+
+	if len(msgs) != want {
+		t.Fatalf("wrong number of messages: %d, want %d", len(msgs), want)
+	}
 }
 
 func TestAttachProc_ChildKeepsPipeOpen(t *testing.T) {

@@ -126,11 +126,11 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 
 		// The buffer filled before reaching newline. Discard the rest of the
 		// line.
-		for errors.Is(bufio.ErrBufferFull, err) {
+		for errors.Is(err, bufio.ErrBufferFull) {
 			_, err = rd.ReadSlice('\n')
 		}
 
-		if errors.Is(io.EOF, err) {
+		if errors.Is(err, io.EOF) {
 			return
 		}
 
