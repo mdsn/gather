@@ -34,6 +34,10 @@ func TestAttachProc_NoOutput(t *testing.T) {
 
 	src, err := attachProc(ctx, spec)
 
+	outC := make(chan []byte)
+	go Consume(src, outC)
+	out := <-outC
+
 	if err != nil {
 		t.Fatalf("err not nil: %v", err)
 	}
@@ -53,7 +57,9 @@ func TestAttachProc_NoOutput(t *testing.T) {
 		t.Fatalf("timeout expired")
 	}
 
-	// TODO check output
+	if string(out) != "" {
+		t.Fatalf("unexpected output: %q", string(out))
+	}
 }
 
 func TestAttachProc_FailsCommandNotFound(t *testing.T) {
