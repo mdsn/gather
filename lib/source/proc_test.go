@@ -61,6 +61,10 @@ func TestAttachProc_NoOutput(t *testing.T) {
 	if string(out) != "" {
 		t.Fatalf("unexpected output: %q", string(out))
 	}
+
+	if _, ok := <-src.Out; ok {
+		t.Fatalf("out channel not closed on exit")
+	}
 }
 
 func TestAttachProc_FailsCommandNotFound(t *testing.T) {
@@ -195,12 +199,6 @@ func TestAttachProc_CancelContext(t *testing.T) {
 	if string(out) != "" {
 		t.Fatalf("unexpected output: %q", string(out))
 	}
-}
-
-func TestAttachProc_ExternalSigterm(t *testing.T) {
-}
-
-func TestAttachProc_ChanClosedOnExit(t *testing.T) {
 }
 
 func TestAttachProc_MultipleSources(t *testing.T) {
