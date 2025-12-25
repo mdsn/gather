@@ -110,13 +110,18 @@ func inotifyReceive(ino *Inotify) {
 				name = strings.TrimRight(string(raw), "\x00")
 			}
 
+			// TODO an event might be queued and processed after the wd has
+			// been removed. Account for that and ignore the event.
+
 			// XXX contention?
 			ino.mu.Lock()
-			ino.wds[int(event.Wd)].out <- Event{
-				Wd:     event.Wd,
-				Cookie: event.Cookie,
-				Mask:   event.Mask,
-				Name:   name,
+			if w, ok := ino.wds[int(event.Wd)]; ok {
+				w.out <- Event{
+					Wd:     event.Wd,
+					Cookie: event.Cookie,
+					Mask:   event.Mask,
+					Name:   name,
+				}
 			}
 			ino.mu.Unlock()
 
