@@ -73,4 +73,8 @@ func TestInotifyRm_ChanClosed(t *testing.T) {
 	if _, ok := <-handle.Out; ok {
 		t.Fatalf("out channel not closed after Rm")
 	}
+
+	if _, ok := ino.wds[handle.wd]; ok {
+		t.Fatalf("Watch still in map after Rm")
+	}
 }
