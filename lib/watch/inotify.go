@@ -10,6 +10,9 @@ import (
 
 const (
 	InotifyBufferSize = 4096
+	// TODO IN_IGNORED can also happen when the os clears a watch due to delete
+	// or unmount. Remove watch when that happens.
+	InotifyMask = syscall.IN_MODIFY
 )
 
 type Event struct {
@@ -39,7 +42,10 @@ func NewInotify() (*Inotify, error) {
 		return nil, err
 	}
 
-	ino := &Inotify{fd: fd}
+	ino := &Inotify{
+		fd: fd,
+		wds: make(map[int]*Watch),
+	}
 	go inotifyReceive(ino)
 
 	return ino, nil
@@ -53,9 +59,8 @@ func (ino *Inotify) Close() error {
 	return nil
 }
 
-// TODO build mask here
-func (ino *Inotify) Add(path string, mask uint32) (chan Event, error) {
-	wd, err := syscall.InotifyAddWatch(ino.fd, path, mask)
+func (ino *Inotify) Add(path string) (chan Event, error) {
+	wd, err := syscall.InotifyAddWatch(ino.fd, path, InotifyMask)
 	if err != nil {
 		return nil, err
 	}
@@ -109,9 +114,6 @@ func inotifyReceive(ino *Inotify) {
 				raw := buf[nameOffset : nameOffset+int(event.Len)]
 				name = strings.TrimRight(string(raw), "\x00")
 			}
-
-			// TODO an event might be queued and processed after the wd has
-			// been removed. Account for that and ignore the event.
 
 			// XXX contention?
 			ino.mu.Lock()
