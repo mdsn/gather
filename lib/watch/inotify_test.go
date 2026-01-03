@@ -78,3 +78,31 @@ func TestInotifyRm_ChanClosed(t *testing.T) {
 		t.Fatalf("Watch still in map after Rm")
 	}
 }
+
+func TestInotify_ReceiveEvent(t *testing.T) {
+	ino, err := NewInotify()
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	tmp, err := os.CreateTemp("", "inotest")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	handle, err := ino.Add(tmp.Name())
+	if err != nil {
+		t.Fatalf("add err: %v", err)
+	}
+
+	bytes := []byte("The show is not the show, but they that go.")
+	if _, err := tmp.Write(bytes); err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+
+	ev := <-handle.Out
+	if int(ev.Wd) != handle.wd {
+		t.Fatal("ev.Wd != handle.wd:", ev.Wd, "!=", handle.wd)
+	}
+}
