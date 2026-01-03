@@ -1,8 +1,8 @@
 package watch
 
 import (
-	"testing"
 	"os"
+	"testing"
 )
 
 func TestNewInotify_HasFd(t *testing.T) {
@@ -33,10 +33,10 @@ func TestInotifyAdd_WatchCreated(t *testing.T) {
 	}
 
 	tmp, err := os.CreateTemp("", "inotest")
-	defer os.Remove(tmp.Name())
 	if err != nil {
 		t.Fatalf("CreateTemp: %v", err)
 	}
+	defer os.Remove(tmp.Name())
 
 	_, err = ino.Add(tmp.Name())
 	if err != nil {
@@ -48,4 +48,29 @@ func TestInotifyAdd_WatchCreated(t *testing.T) {
 	}
 }
 
+func TestInotifyRm_ChanClosed(t *testing.T) {
+	ino, err := NewInotify()
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
 
+	tmp, err := os.CreateTemp("", "inotest")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	handle, err := ino.Add(tmp.Name())
+	if err != nil {
+		t.Fatalf("add err: %v", err)
+	}
+
+	err = ino.Rm(handle)
+	if err != nil {
+		t.Fatalf("rm err: %v", err)
+	}
+
+	if _, ok := <-handle.Out; ok {
+		t.Fatalf("out channel not closed after Rm")
+	}
+}
