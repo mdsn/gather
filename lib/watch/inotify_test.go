@@ -106,3 +106,57 @@ func TestInotify_ReceiveEvent(t *testing.T) {
 		t.Fatal("ev.Wd != handle.wd:", ev.Wd, "!=", handle.wd)
 	}
 }
+
+func TestInotify_ReceiveEventDifferentFiles(t *testing.T) {
+	ino, err := NewInotify()
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	tmp1, err := os.CreateTemp("", "inotest")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	tmp2, err := os.CreateTemp("", "inotest")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	defer os.Remove(tmp1.Name())
+	defer os.Remove(tmp2.Name())
+
+	handle1, err := ino.Add(tmp1.Name())
+	if err != nil {
+		t.Fatalf("add err: %v", err)
+	}
+
+	handle2, err := ino.Add(tmp2.Name())
+	if err != nil {
+		t.Fatalf("add err: %v", err)
+	}
+
+	bytes1 := []byte("The show is not the show, but they that go.")
+	if _, err := tmp1.Write(bytes1); err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+
+	bytes2 := []byte("The trouble's small, the fun is great.")
+	if _, err := tmp2.Write(bytes2); err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+
+	ev1 := <-handle1.Out
+	ev2 := <-handle2.Out
+
+	if int(ev1.Wd) != handle1.wd {
+		t.Fatal("Unexpected wd: got", ev1.Wd, "wanted", handle1.wd)
+	}
+
+	if int(ev2.Wd) != handle2.wd {
+		t.Fatal("Unexpected wd: got", ev2.Wd, "wanted", handle2.wd)
+	}
+
+	ino.Rm(handle1)
+	ino.Rm(handle2)
+}
