@@ -3,6 +3,7 @@ package watch
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestNewInotify_HasFd(t *testing.T) {
@@ -20,9 +21,16 @@ func TestInotifyClose_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+
 	err = ino.Close()
 	if err != nil {
 		t.Fatalf("err closing inotify: %v", err)
+	}
+
+	select {
+	case <-ino.done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout expired")
 	}
 }
 

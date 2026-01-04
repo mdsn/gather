@@ -37,10 +37,14 @@ type Inotify struct {
 	mu  sync.Mutex
 	fd  int
 	wds map[int]*Watch
+	// Indicates receive goroutine exit
+	done chan struct{}
 }
 
 func NewInotify() (*Inotify, error) {
-	// XXX do we need FD_CLOEXEC?
+	// XXX do we need FD_CLOEXEC? YES. A child might keep the inotify
+	// instance alive otherwise. Use inotify_init1 with IN_NONBLOCK |
+	// IN_CLOEXEC
 	fd, err := syscall.InotifyInit()
 	if err != nil {
 		// XXX test all errno for this syscall and wrap
@@ -50,6 +54,7 @@ func NewInotify() (*Inotify, error) {
 	ino := &Inotify{
 		fd:  fd,
 		wds: make(map[int]*Watch),
+		done: make(chan struct{}),
 	}
 	go inotifyReceive(ino)
 
@@ -100,10 +105,16 @@ func (ino *Inotify) Rm(handle *WatchHandle) error {
 }
 
 func inotifyReceive(ino *Inotify) {
+	defer close(ino.done)
+
 	buf := make([]byte, InotifyBufferSize)
 	for {
 		buf = buf[:cap(buf)]
 
+		// XXX set fd to nonblocking, drive with epoll. close(2) says
+		// there are no guarantees for concurrent reads on a fd when
+		// it is closed--the fd might be reused and cause a race with
+		// less than good consequences.
 		n, err := syscall.Read(ino.fd, buf)
 		if err != nil {
 			// XXX do something with err
