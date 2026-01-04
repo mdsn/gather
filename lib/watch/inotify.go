@@ -40,6 +40,8 @@ type Inotify struct {
 	mu sync.Mutex
 	// awaits the inotifyReceive goroutine
 	wg sync.WaitGroup
+	// ensure a single call to Close()
+	once sync.Once
 	// inotify descriptor
 	ifd int
 	// eventfd(2) descriptor
@@ -53,14 +55,8 @@ type Inotify struct {
 }
 
 func NewInotify() (*Inotify, error) {
-	// TODO create eventfd(2) into the InotifyInstance; it will be
-	// epoll_wait()ed along with the ino fd; on Close() and any other reason to
-	// terminate the goroutine, writing an int into it will unblock the epoll
-	// effectively implementing an interruptible block.
-
 	ifd, err := unix.InotifyInit1(unix.IN_NONBLOCK | unix.IN_CLOEXEC)
 	if err != nil {
-		// XXX test all errno for this syscall and wrap
 		return nil, err
 	}
 
@@ -90,6 +86,7 @@ func NewInotify() (*Inotify, error) {
 
 	ino := &Inotify{
 		wg:   sync.WaitGroup{},
+		once: sync.Once{},
 		ifd:  ifd,
 		evfd: evfd,
 		epfd: epfd,
@@ -102,26 +99,25 @@ func NewInotify() (*Inotify, error) {
 }
 
 func (ino *Inotify) Close() error {
-	defer close(ino.done)
-	// TODO put a sync.Once to ensure idempotent closing.
+	var err error
+	ino.once.Do(func() {
+		defer close(ino.done)
 
-	// Write 1 into evfd, wait for ino.done (goroutine exited) then clean up
-	// all three file descriptors.
-	_, err := unix.Write(ino.evfd, []byte{0, 0, 0, 0, 0, 0, 0, 1})
-	if err != nil {
-		panic(fmt.Sprintf("eventfd write: %v", err))
-	}
+		// Write 1 into evfd, wait for ino.done (goroutine exited) then clean up
+		// all three file descriptors.
+		_, err = unix.Write(ino.evfd, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+		if err != nil {
+			panic(fmt.Sprintf("eventfd write: %v", err))
+		}
 
-	ino.wg.Wait() // Wait for inotifyReceive to wrap up.
+		ino.wg.Wait() // Wait for inotifyReceive to wrap up.
 
-	err = errors.Join(
-		unix.Close(ino.ifd),
-		unix.Close(ino.evfd),
-		unix.Close(ino.epfd))
-	if err != nil {
-		return err // ??
-	}
-	return nil
+		err = errors.Join(
+			unix.Close(ino.ifd),
+			unix.Close(ino.evfd),
+			unix.Close(ino.epfd))
+	})
+	return err
 }
 
 func (ino *Inotify) Add(path string) (*WatchHandle, error) {

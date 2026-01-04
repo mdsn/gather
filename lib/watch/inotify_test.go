@@ -37,6 +37,23 @@ func TestInotifyClose_Success(t *testing.T) {
 	}
 }
 
+func TestInotifyClose_Idempotent(t *testing.T) {
+	ino, err := NewInotify()
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+
+	err = ino.Close()
+	if err != nil {
+		t.Fatalf("err closing inotify: %v", err)
+	}
+
+	<-ino.done
+
+	ino.Close()
+	ino.Close()
+}
+
 func TestInotify_EventfdCloses(t *testing.T) {
 	ino, err := NewInotify()
 	if err != nil {
