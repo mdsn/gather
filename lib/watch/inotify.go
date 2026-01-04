@@ -6,6 +6,8 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -34,10 +36,12 @@ type WatchHandle struct {
 }
 
 type Inotify struct {
-	mu  sync.Mutex
-	fd  int
+	mu sync.Mutex
+	fd int
+	// eventfd(2) descriptor
+	efd int
 	wds map[int]*Watch
-	// Indicates receive goroutine exit
+	// Indicates inotifyReceive goroutine exited
 	done chan struct{}
 }
 
@@ -45,15 +49,27 @@ func NewInotify() (*Inotify, error) {
 	// XXX do we need FD_CLOEXEC? YES. A child might keep the inotify
 	// instance alive otherwise. Use inotify_init1 with IN_NONBLOCK |
 	// IN_CLOEXEC
+	// TODO create eventfd(2) into the InotifyInstance; it will be
+	// epoll_wait()ed along with the ino fd; on Close() and any other reason to
+	// terminate the goroutine, writing an int into it will unblock the epoll
+	// effectively implementing an interruptible block.
+
+	// XXX migrate all syscall uses to unix
 	fd, err := syscall.InotifyInit()
 	if err != nil {
 		// XXX test all errno for this syscall and wrap
 		return nil, err
 	}
 
+	efd, err := unix.Eventfd(0, unix.EFD_CLOEXEC|unix.EFD_NONBLOCK)
+	if err != nil {
+		return nil, err
+	}
+
 	ino := &Inotify{
-		fd:  fd,
-		wds: make(map[int]*Watch),
+		fd:   fd,
+		efd:  efd,
+		wds:  make(map[int]*Watch),
 		done: make(chan struct{}),
 	}
 	go inotifyReceive(ino)
