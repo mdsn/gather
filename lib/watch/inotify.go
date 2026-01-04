@@ -2,6 +2,7 @@ package watch
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"unsafe"
@@ -35,10 +36,17 @@ type WatchHandle struct {
 }
 
 type Inotify struct {
-	mu  sync.Mutex
+	// synchronizes access to wds
+	mu sync.Mutex
+	// awaits the inotifyReceive goroutine
+	wg sync.WaitGroup
+	// inotify descriptor
 	ifd int
 	// eventfd(2) descriptor
-	efd int
+	evfd int
+	// epoll descriptor
+	epfd int
+	// watches keyed by watch descriptor
 	wds map[int]*Watch
 	// Indicates inotifyReceive goroutine exited
 	done chan struct{}
@@ -50,31 +58,66 @@ func NewInotify() (*Inotify, error) {
 	// terminate the goroutine, writing an int into it will unblock the epoll
 	// effectively implementing an interruptible block.
 
-	// XXX migrate all syscall uses to unix
 	ifd, err := unix.InotifyInit1(unix.IN_NONBLOCK | unix.IN_CLOEXEC)
 	if err != nil {
 		// XXX test all errno for this syscall and wrap
 		return nil, err
 	}
 
-	efd, err := unix.Eventfd(0, unix.EFD_CLOEXEC|unix.EFD_NONBLOCK)
+	evfd, err := unix.Eventfd(0, unix.EFD_CLOEXEC|unix.EFD_NONBLOCK)
+	if err != nil {
+		return nil, err
+	}
+
+	epfd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
+	if err != nil {
+		return nil, err
+	}
+
+	err = unix.EpollCtl(epfd, unix.EPOLL_CTL_ADD, ifd, &unix.EpollEvent{
+		Events: unix.EPOLLIN, Fd: int32(ifd),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = unix.EpollCtl(epfd, unix.EPOLL_CTL_ADD, evfd, &unix.EpollEvent{
+		Events: unix.EPOLLIN, Fd: int32(evfd),
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	ino := &Inotify{
+		wg:   sync.WaitGroup{},
 		ifd:  ifd,
-		efd:  efd,
+		evfd: evfd,
+		epfd: epfd,
 		wds:  make(map[int]*Watch),
 		done: make(chan struct{}),
 	}
-	go inotifyReceive(ino)
+	ino.wg.Go(func() { inotifyReceive(ino) })
 
 	return ino, nil
 }
 
 func (ino *Inotify) Close() error {
-	err := unix.Close(ino.ifd)
+	defer close(ino.done)
+	// TODO put a sync.Once to ensure idempotent closing.
+
+	// Write 1 into evfd, wait for ino.done (goroutine exited) then clean up
+	// all three file descriptors.
+	_, err := unix.Write(ino.evfd, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	if err != nil {
+		panic(fmt.Sprintf("eventfd write: %v", err))
+	}
+
+	ino.wg.Wait() // Wait for inotifyReceive to wrap up.
+
+	err = errors.Join(
+		unix.Close(ino.ifd),
+		unix.Close(ino.evfd),
+		unix.Close(ino.epfd))
 	if err != nil {
 		return err // ??
 	}
@@ -118,20 +161,35 @@ func (ino *Inotify) Rm(handle *WatchHandle) error {
 }
 
 func inotifyReceive(ino *Inotify) {
-	defer close(ino.done)
-
+	epev := make([]unix.EpollEvent, 2) // Max 2 fd: inotify, eventfd
 	buf := make([]byte, InotifyBufferSize)
 	for {
 		buf = buf[:cap(buf)]
 
-		// XXX set fd to nonblocking, drive with epoll. close(2) says
-		// there are no guarantees for concurrent reads on a fd when
-		// it is closed--the fd might be reused and cause a race with
-		// less than good consequences.
-		n, err := unix.Read(ino.ifd, buf)
+		// XXX get rid of panics, fix error handling. This runs in a WaitGroup
+
+		// Block for either the inotify or eventfd to be ready.
+		n, err := unix.EpollWait(ino.epfd, epev, -1)
 		if err != nil {
-			// XXX do something with err
-			return
+			panic(fmt.Sprintf("EpollWait: %v", err))
+		}
+
+		if n <= 0 {
+			panic("EpollWait: n <= 0") // Should not happen with timeout == -1
+		}
+
+		// epev contains at most two events; if one of them is on evfd, we are
+		// wrapping up and need to terminate the goroutine.
+		for i := range n {
+			if int(epev[i].Fd) == ino.evfd {
+				return
+			}
+		}
+
+		// ino fd is ready and we can proceed to collect the events.
+		n, err = unix.Read(ino.ifd, buf)
+		if err != nil {
+			panic(fmt.Sprintf("Read: %v", err))
 		}
 		buf = buf[:n]
 

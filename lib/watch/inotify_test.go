@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"golang.org/x/sys/unix"
 	"os"
 	"testing"
 	"time"
@@ -11,6 +12,8 @@ func TestNewInotify_HasFd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+	defer ino.Close()
+
 	if ino.ifd == 0 {
 		t.Fatalf("fd is 0")
 	}
@@ -34,11 +37,39 @@ func TestInotifyClose_Success(t *testing.T) {
 	}
 }
 
+func TestInotify_EventfdCloses(t *testing.T) {
+	ino, err := NewInotify()
+	if err != nil {
+		t.Fatalf("got err: %v", err)
+	}
+	defer ino.Close()
+
+	_, err = unix.Write(ino.evfd, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ino.wg.Wait()
+		close(done)
+	}()
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		t.Fatalf("timed out")
+	}
+}
+
 func TestInotifyAdd_WatchCreated(t *testing.T) {
 	ino, err := NewInotify()
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+	defer ino.Close()
 
 	tmp, err := os.CreateTemp("", "inotest")
 	if err != nil {
@@ -61,6 +92,7 @@ func TestInotifyRm_ChanClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+	defer ino.Close()
 
 	tmp, err := os.CreateTemp("", "inotest")
 	if err != nil {
@@ -92,6 +124,7 @@ func TestInotify_ReceiveEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+	defer ino.Close()
 
 	tmp, err := os.CreateTemp("", "inotest")
 	if err != nil {
@@ -120,6 +153,7 @@ func TestInotify_ReceiveEventDifferentFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
+	defer ino.Close()
 
 	tmp1, err := os.CreateTemp("", "inotest")
 	if err != nil {
