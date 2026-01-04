@@ -2,6 +2,8 @@ package source
 
 import (
 	"context"
+	"io"
+	"os"
 
 	"github.com/mdsn/nexus/lib/watch"
 )
@@ -19,10 +21,77 @@ func NewManager() *Manager {
 }
 
 func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
-	// When attaching a new file, Inotify.Add() it.
-	// Events start pouring in on the Ino goroutine.
-	// They get fanned out to each Watch out channel.
-	// Here on AttachFile we listen on a specific Watch channel,
-	// and write out into the Source.
-	return nil, nil
+	handle, err := m.inotify.Add(spec.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	fp, err := os.Open(spec.Path)
+	if err != nil {
+		// XXX close handle.Out?
+		return nil, err
+	}
+
+	src := &Source{
+		Id:   spec.Id,
+		Kind: KindFile,
+		Done: make(chan struct{}),
+		Out:  make(chan Output),
+		Err:  make(chan error),
+	}
+
+	go func() {
+		// Start at EOF
+		offset, err := fileSize(fp)
+		if err != nil {
+			return // XXX ?
+		}
+
+		buf := make([]byte, 4096)
+		for _ = range handle.Out {
+			sz, err := fileSize(fp)
+			if err != nil {
+				return
+			}
+
+			// File was truncated, bring offset back
+			if sz < offset {
+				offset = sz
+				continue
+			}
+
+			// read file from offset
+			_, err = fp.Seek(offset, 0)
+			if err != nil {
+				return
+			}
+
+			for {
+				n, err := fp.Read(buf)
+				if n == 0 && err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					return
+				}
+
+				offset += int64(n)
+				// stream lines into src.Out
+			}
+
+			// TODO final read may be a partial line, store in a partial buffer
+			// until next read.
+		}
+	}()
+
+	return src, nil
+}
+
+func fileSize(fp *os.File) (int64, error) {
+	stat, err := fp.Stat()
+	if err != nil {
+		return -1, err
+	}
+	return stat.Size(), nil
 }
