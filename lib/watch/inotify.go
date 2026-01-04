@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -14,7 +13,7 @@ const (
 	InotifyBufferSize = 4096
 	// TODO IN_IGNORED can also happen when the os clears a watch due to delete
 	// or unmount. Remove watch when that happens.
-	InotifyMask = syscall.IN_MODIFY
+	InotifyMask = unix.IN_MODIFY
 )
 
 type Event struct {
@@ -36,8 +35,8 @@ type WatchHandle struct {
 }
 
 type Inotify struct {
-	mu sync.Mutex
-	fd int
+	mu  sync.Mutex
+	ifd int
 	// eventfd(2) descriptor
 	efd int
 	wds map[int]*Watch
@@ -46,16 +45,13 @@ type Inotify struct {
 }
 
 func NewInotify() (*Inotify, error) {
-	// XXX do we need FD_CLOEXEC? YES. A child might keep the inotify
-	// instance alive otherwise. Use inotify_init1 with IN_NONBLOCK |
-	// IN_CLOEXEC
 	// TODO create eventfd(2) into the InotifyInstance; it will be
 	// epoll_wait()ed along with the ino fd; on Close() and any other reason to
 	// terminate the goroutine, writing an int into it will unblock the epoll
 	// effectively implementing an interruptible block.
 
 	// XXX migrate all syscall uses to unix
-	fd, err := syscall.InotifyInit()
+	ifd, err := unix.InotifyInit1(unix.IN_NONBLOCK | unix.IN_CLOEXEC)
 	if err != nil {
 		// XXX test all errno for this syscall and wrap
 		return nil, err
@@ -67,7 +63,7 @@ func NewInotify() (*Inotify, error) {
 	}
 
 	ino := &Inotify{
-		fd:   fd,
+		ifd:  ifd,
 		efd:  efd,
 		wds:  make(map[int]*Watch),
 		done: make(chan struct{}),
@@ -78,7 +74,7 @@ func NewInotify() (*Inotify, error) {
 }
 
 func (ino *Inotify) Close() error {
-	err := syscall.Close(ino.fd)
+	err := unix.Close(ino.ifd)
 	if err != nil {
 		return err // ??
 	}
@@ -86,7 +82,7 @@ func (ino *Inotify) Close() error {
 }
 
 func (ino *Inotify) Add(path string) (*WatchHandle, error) {
-	wd, err := syscall.InotifyAddWatch(ino.fd, path, InotifyMask)
+	wd, err := unix.InotifyAddWatch(ino.ifd, path, InotifyMask)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +109,8 @@ func (ino *Inotify) Rm(handle *WatchHandle) error {
 	delete(ino.wds, handle.wd)
 	ino.mu.Unlock()
 
-	_, err := syscall.InotifyRmWatch(ino.fd, uint32(handle.wd))
+	// XXX Does `success` have any use here?
+	_, err := unix.InotifyRmWatch(ino.ifd, uint32(handle.wd))
 	if err != nil {
 		return err
 	}
@@ -131,7 +128,7 @@ func inotifyReceive(ino *Inotify) {
 		// there are no guarantees for concurrent reads on a fd when
 		// it is closed--the fd might be reused and cause a race with
 		// less than good consequences.
-		n, err := syscall.Read(ino.fd, buf)
+		n, err := unix.Read(ino.ifd, buf)
 		if err != nil {
 			// XXX do something with err
 			return
@@ -140,8 +137,8 @@ func inotifyReceive(ino *Inotify) {
 
 		offset := 0
 		for offset < len(buf) {
-			event := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-			nameOffset := offset + syscall.SizeofInotifyEvent
+			event := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
+			nameOffset := offset + unix.SizeofInotifyEvent
 
 			var name string
 			if event.Len > 0 {
@@ -161,7 +158,7 @@ func inotifyReceive(ino *Inotify) {
 			}
 			ino.mu.Unlock()
 
-			offset += syscall.SizeofInotifyEvent + int(event.Len)
+			offset += unix.SizeofInotifyEvent + int(event.Len)
 		}
 	}
 }

@@ -11,7 +11,7 @@ func TestNewInotify_HasFd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
-	if ino.fd == 0 {
+	if ino.ifd == 0 {
 		t.Fatalf("fd is 0")
 	}
 }
