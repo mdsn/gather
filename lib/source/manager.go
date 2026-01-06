@@ -70,6 +70,8 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 			}
 
 			for {
+				buf = buf[:cap(buf)]
+
 				n, err := fp.Read(buf)
 				if n == 0 && err == io.EOF {
 					break
@@ -79,34 +81,30 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 					return
 				}
 
+				// Consume all newlines read
 				nlix := slices.Index(buf, '\n')
-				if nlix != -1 {
+				for nlix != -1 {
 					if truncating {
-						buf = discardPrefix(buf, nlix+1)
 						truncating = false
 					} else {
-						_, err := partial.Write(buf[:nlix])
-						if err != nil {
-							// Buffer was filled, discard bytes up to and
-							// including newline
-							buf = discardPrefix(buf, nlix+1)
-						}
+						partial.Write(buf[:nlix])
+						output(partial, src)
 					}
+					// Trim prefix regardless of the fixed buffer being filled.
+					buf = discardPrefix(buf, nlix+1)
+					nlix = slices.Index(buf, '\n')
+				}
 
-					output(partial, src)
-				} else {
-					if truncating {
-						// Discard the entire buffer, keep looking for newline
-						continue
-					} else {
-						_, err := partial.Write(buf)
-						if err != nil {
-							// Discard all bytes
-							buf = buf[:0]
-							truncating = true
-
-							output(partial, src)
-						}
+				// Here buf is either the suffix after the final newline, or a
+				// fully read buffer that never had a newline to begin with.
+				// Same thing. If truncating, discard the entire buffer.
+				if !truncating {
+					// Write last chunk to fixed buffer; output only if it
+					// fills up.
+					_, err := partial.Write(buf)
+					if err != nil {
+						truncating = true
+						output(partial, src)
 					}
 				}
 
@@ -131,6 +129,7 @@ func discardPrefix(b []byte, n int) []byte {
 	} else {
 		b = b[n:]
 	}
+	return b
 }
 
 func fileSize(fp *os.File) (int64, error) {
