@@ -30,6 +30,15 @@ type Source struct {
 	Err  chan error
 }
 
+func (src *Source) Send(b []byte) {
+	buf := make([]byte, len(b))
+	copy(buf, b)
+	src.Out <- Output{
+		CapturedAt: time.Now(),
+		Bytes:      buf,
+	}
+}
+
 type Spec struct {
 	Id   string
 	Kind SourceKind

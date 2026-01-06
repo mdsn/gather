@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/mdsn/nexus/lib/watch"
 )
@@ -47,6 +48,8 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 			return // XXX ?
 		}
 
+		truncating := false
+		partial := NewFixedBuffer(4096 * 2)
 		buf := make([]byte, 4096)
 		for _ = range handle.Out {
 			sz, err := fileSize(fp)
@@ -76,16 +79,58 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 					return
 				}
 
-				offset += int64(n)
-				// stream lines into src.Out
-			}
+				nlix := slices.Index(buf, '\n')
+				if nlix != -1 {
+					if truncating {
+						buf = discardPrefix(buf, nlix+1)
+						truncating = false
+					} else {
+						_, err := partial.Write(buf[:nlix])
+						if err != nil {
+							// Buffer was filled, discard bytes up to and
+							// including newline
+							buf = discardPrefix(buf, nlix+1)
+						}
+					}
 
-			// TODO final read may be a partial line, store in a partial buffer
-			// until next read.
+					output(partial, src)
+				} else {
+					if truncating {
+						// Discard the entire buffer, keep looking for newline
+						continue
+					} else {
+						_, err := partial.Write(buf)
+						if err != nil {
+							// Discard all bytes
+							buf = buf[:0]
+							truncating = true
+
+							output(partial, src)
+						}
+					}
+				}
+
+				offset += int64(n)
+			}
 		}
 	}()
 
 	return src, nil
+}
+
+func output(b *FixedBuffer, src *Source) {
+	src.Send(b.buf)
+	b.Clear()
+}
+
+// Discard up to and not including index n; if n > len(b), discard the whole
+// thing.
+func discardPrefix(b []byte, n int) []byte {
+	if len(b) < n {
+		b = b[:0]
+	} else {
+		b = b[n:]
+	}
 }
 
 func fileSize(fp *os.File) (int64, error) {
@@ -94,4 +139,36 @@ func fileSize(fp *os.File) (int64, error) {
 		return -1, err
 	}
 	return stat.Size(), nil
+}
+
+type ErrFull struct{}
+
+func (e *ErrFull) Error() string {
+	return "ring buffer full"
+}
+
+// A fixed size buffer that signals full.
+type FixedBuffer struct {
+	buf []byte
+}
+
+func NewFixedBuffer(n int) *FixedBuffer {
+	return &FixedBuffer{buf: make([]byte, n)}
+}
+
+func (b *FixedBuffer) Write(p []byte) (int, error) {
+	// How many bytes can we copy into the buffer
+	avail := cap(b.buf) - len(b.buf)
+	// Append up to that number of bytes
+	b.buf = append(b.buf, p[:avail]...)
+	// If the buffer was filled we used all the available space
+	if len(b.buf) == cap(b.buf) {
+		return avail, &ErrFull{}
+	}
+	// If the buffer was not filled we copied all the source bytes
+	return len(p), nil
+}
+
+func (b *FixedBuffer) Clear() {
+	b.buf = b.buf[:0]
 }
