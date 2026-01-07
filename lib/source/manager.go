@@ -33,14 +33,17 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 	}
 
 	src := &Source{
-		Id:   spec.Id,
-		Kind: KindFile,
-		Done: make(chan struct{}),
-		Out:  make(chan Output),
-		Err:  make(chan error),
+		Id:    spec.Id,
+		Kind:  KindFile,
+		Done:  make(chan struct{}),
+		Ready: make(chan struct{}),
+		Out:   make(chan Output),
+		Err:   make(chan error),
 	}
 
 	go func() {
+		defer close(src.Done)
+
 		// Start at EOF
 		offset, err := fileSize(fp)
 		if err != nil {
@@ -49,7 +52,19 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 
 		lb := NewLineBuffer(4096 * 2)
 		buf := make([]byte, 4096)
-		for _ = range handle.Out {
+
+		// Start listening
+		close(src.Ready)
+
+	outer:
+		for {
+			select {
+			case <-ctx.Done():
+				break outer
+			case <-handle.Out:
+				// Continue
+			}
+
 			sz, err := fileSize(fp)
 			if err != nil {
 				return

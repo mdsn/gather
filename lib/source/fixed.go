@@ -6,7 +6,7 @@ func (e *ErrFull) Error() string {
 	return "fixed buffer full"
 }
 
-// A fixed size buffer that signals full.
+// A fixed size buffer that signals when it is full.
 type FixedBuffer struct {
 	buf []byte
 }

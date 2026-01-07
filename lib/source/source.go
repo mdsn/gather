@@ -25,9 +25,12 @@ type Output struct {
 type Source struct {
 	Id   string
 	Kind SourceKind
+	// Closed when reading goroutine exits.
 	Done chan struct{}
-	Out  chan Output
-	Err  chan error
+	// Closed when reading goroutine is ready to read.
+	Ready chan struct{}
+	Out   chan Output
+	Err   chan error
 }
 
 func (src *Source) Send(b []byte) {
