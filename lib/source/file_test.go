@@ -58,6 +58,16 @@ func write(f *os.File, b []byte) (n int, err error) {
 	return n, nil
 }
 
+// Wait for src.Done with the given timeout
+func wait(src *Source, deadline time.Duration) error {
+	select {
+	case <-src.Done:
+	case <-time.After(deadline):
+		return errors.New("timeout waiting for src.Done")
+	}
+	return nil
+}
+
 func TestAttachFile_OutputLines(t *testing.T) {
 	m := NewManager()
 	defer m.inotify.Close()
@@ -95,10 +105,9 @@ func TestAttachFile_OutputLines(t *testing.T) {
 
 	cancel()
 
-	select {
-	case <-src.Done:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for src.Done")
+	err = wait(src, time.Second)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if len(lines) != 2 {
