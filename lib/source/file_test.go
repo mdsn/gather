@@ -2,6 +2,8 @@ package source
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -15,17 +17,34 @@ func MakeSpec(id string) (*os.File, *Spec, error) {
 	return tmp, &Spec{Id: id, Kind: KindFile, Path: tmp.Name()}, nil
 }
 
-func CollectLines(srcC chan Output) [][]byte {
-	lines := make([][]byte, 0)
-	for output := range srcC {
-		lines = append(lines, output.Bytes)
+// Consume lines from a source's Out channel into a line channel
+func consume(ctx context.Context, src *Source, lineC chan []byte) {
+	defer close(lineC)
+	for out := range src.Out {
+		select {
+		case lineC <- out.Bytes:
+		case <-ctx.Done():
+			return
+		}
 	}
-	return lines
 }
 
-func consume(src *Source, outC chan [][]byte) {
-	lines := CollectLines(src.Out)
-	outC <- lines
+// Collect a specific number of lines from a line channel with a timeout
+func collect(n int, lineC chan []byte, deadline time.Duration) ([][]byte, error) {
+	timeout := time.NewTimer(deadline)
+	defer timeout.Stop()
+
+	var lines [][]byte
+	for len(lines) < n {
+		select {
+		case line := <-lineC:
+			lines = append(lines, line)
+		case <-timeout.C:
+			return nil, errors.New(fmt.Sprintf("timeout; wanted %d lines, got %d", n, len(lines)))
+		}
+	}
+
+	return lines, nil
 }
 
 func TestAttachFile_OutputLines(t *testing.T) {
@@ -47,20 +66,12 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	}
 
 	lineC := make(chan []byte, 16)
-	go func() {
-		defer close(lineC)
-		for out := range src.Out {
-			select {
-			case lineC <- out.Bytes:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
+	go consume(ctx, src, lineC)
 	<-src.Ready
 
-	bytes := []byte("Is't life, I ask, is't even prudence,\nTo bore thyself and bore the students?\n")
+	line1 := "Is't life, I ask, is't even prudence,"
+	line2 := "To bore thyself and bore the students?"
+	bytes := []byte(fmt.Sprintf("%s\n%s\n", line1, line2))
 	if _, err := tmp.Write(bytes); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -68,17 +79,9 @@ func TestAttachFile_OutputLines(t *testing.T) {
 		t.Fatalf("sync: %v", err)
 	}
 
-	deadline := time.NewTimer(time.Second)
-	defer deadline.Stop()
-
-	var lines [][]byte
-	for len(lines) < 2 {
-		select {
-		case line := <-lineC:
-			lines = append(lines, line)
-		case <-deadline.C:
-			t.Fatalf("timeout; wanted 2 lines, got %d", len(lines))
-		}
+	lines, err := collect(2, lineC, time.Second)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
 	}
 
 	cancel()
@@ -91,5 +94,8 @@ func TestAttachFile_OutputLines(t *testing.T) {
 
 	if len(lines) != 2 {
 		t.Fatal("wrong length, want 2, got", len(lines))
+	}
+	if string(lines[0]) != line1 || string(lines[1]) != line2 {
+		t.Fatalf("unexpected output: '%s' '%s'", line1, line2)
 	}
 }
