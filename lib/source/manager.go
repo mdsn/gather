@@ -91,62 +91,10 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 	return src, nil
 }
 
-func output(b *FixedBuffer, src *Source) {
-	src.Send(b.buf)
-	b.Clear()
-}
-
-// Discard up to and not including index n; if n > len(b), discard the whole
-// thing.
-func discardPrefix(b []byte, n int) []byte {
-	if len(b) < n {
-		b = b[:0]
-	} else {
-		b = b[n:]
-	}
-	return b
-}
-
 func fileSize(fp *os.File) (int64, error) {
 	stat, err := fp.Stat()
 	if err != nil {
 		return -1, err
 	}
 	return stat.Size(), nil
-}
-
-type ErrFull struct{}
-
-func (e *ErrFull) Error() string {
-	return "ring buffer full"
-}
-
-// A fixed size buffer that signals full.
-type FixedBuffer struct {
-	buf []byte
-}
-
-func NewFixedBuffer(n int) *FixedBuffer {
-	return &FixedBuffer{buf: make([]byte, 0, n)}
-}
-
-func (b *FixedBuffer) Len() int {
-	return len(b.buf)
-}
-
-func (b *FixedBuffer) Write(p []byte) (int, error) {
-	// How many bytes can we copy into the buffer
-	n := min(cap(b.buf)-len(b.buf), len(p))
-	// Append up to that number of bytes
-	b.buf = append(b.buf, p[:n]...)
-	// If the buffer was filled we used all the available space
-	if len(b.buf) == cap(b.buf) {
-		return n, &ErrFull{}
-	}
-	// If the buffer was not filled we copied all the source bytes
-	return len(p), nil
-}
-
-func (b *FixedBuffer) Clear() {
-	b.buf = b.buf[:0]
 }

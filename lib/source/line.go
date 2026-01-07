@@ -67,3 +67,14 @@ func (lb *LineBuffer) take() []byte {
 	lb.fb.Clear()
 	return line
 }
+
+// Discard up to and not including index n; if n > len(b), discard the whole
+// thing.
+func discardPrefix(b []byte, n int) []byte {
+	if len(b) < n {
+		b = b[:0]
+	} else {
+		b = b[n:]
+	}
+	return b
+}
