@@ -47,6 +47,17 @@ func collect(n int, lineC chan []byte, deadline time.Duration) ([][]byte, error)
 	return lines, nil
 }
 
+// Write some output into the given file and sync it.
+func write(f *os.File, b []byte) (n int, err error) {
+	if n, err = f.Write(b); err != nil {
+		return -1, errors.New(fmt.Sprintf("write: %v", err))
+	}
+	if err = f.Sync(); err != nil {
+		return -1, errors.New(fmt.Sprintf("sync: %v", err))
+	}
+	return n, nil
+}
+
 func TestAttachFile_OutputLines(t *testing.T) {
 	m := NewManager()
 	defer m.inotify.Close()
@@ -72,11 +83,9 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	line1 := "Is't life, I ask, is't even prudence,"
 	line2 := "To bore thyself and bore the students?"
 	bytes := []byte(fmt.Sprintf("%s\n%s\n", line1, line2))
-	if _, err := tmp.Write(bytes); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		t.Fatalf("sync: %v", err)
+	_, err = write(tmp, bytes)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	lines, err := collect(2, lineC, time.Second)

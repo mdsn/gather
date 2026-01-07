@@ -43,6 +43,7 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 	src := &Source{
 		Id:   spec.Id,
 		Kind: KindProc,
+		// XXX Ready barrier?
 		Done: make(chan struct{}),
 		Out:  make(chan Output),
 		Err:  make(chan error),
