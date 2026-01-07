@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"slices"
 
 	"github.com/mdsn/nexus/lib/watch"
 )
@@ -48,8 +47,7 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 			return // XXX ?
 		}
 
-		truncating := false
-		partial := NewFixedBuffer(4096 * 2)
+		lb := NewLineBuffer(4096 * 2)
 		buf := make([]byte, 4096)
 		for _ = range handle.Out {
 			sz, err := fileSize(fp)
@@ -76,39 +74,16 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 				if n == 0 && err == io.EOF {
 					break
 				}
-
 				if err != nil {
 					return
 				}
 
-				// Consume all newlines read
-				nlix := slices.Index(buf, '\n')
-				for nlix != -1 {
-					if truncating {
-						truncating = false
-					} else {
-						partial.Write(buf[:nlix])
-						output(partial, src)
-					}
-					// Trim prefix regardless of the fixed buffer being filled.
-					buf = discardPrefix(buf, nlix+1)
-					nlix = slices.Index(buf, '\n')
-				}
-
-				// Here buf is either the suffix after the final newline, or a
-				// fully read buffer that never had a newline to begin with.
-				// Same thing. If truncating, discard the entire buffer.
-				if !truncating {
-					// Write last chunk to fixed buffer; output only if it
-					// fills up.
-					_, err := partial.Write(buf)
-					if err != nil {
-						truncating = true
-						output(partial, src)
-					}
-				}
-
 				offset += int64(n)
+
+				lb.Add(buf)
+				for line := range lb.Lines() {
+					src.Send(line)
+				}
 			}
 		}
 	}()
@@ -152,17 +127,21 @@ type FixedBuffer struct {
 }
 
 func NewFixedBuffer(n int) *FixedBuffer {
-	return &FixedBuffer{buf: make([]byte, n)}
+	return &FixedBuffer{buf: make([]byte, 0, n)}
+}
+
+func (b *FixedBuffer) Len() int {
+	return len(b.buf)
 }
 
 func (b *FixedBuffer) Write(p []byte) (int, error) {
 	// How many bytes can we copy into the buffer
-	avail := cap(b.buf) - len(b.buf)
+	n := min(cap(b.buf)-len(b.buf), len(p))
 	// Append up to that number of bytes
-	b.buf = append(b.buf, p[:avail]...)
+	b.buf = append(b.buf, p[:n]...)
 	// If the buffer was filled we used all the available space
 	if len(b.buf) == cap(b.buf) {
-		return avail, &ErrFull{}
+		return n, &ErrFull{}
 	}
 	// If the buffer was not filled we copied all the source bytes
 	return len(p), nil
