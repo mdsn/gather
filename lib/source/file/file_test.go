@@ -1,4 +1,4 @@
-package manager
+package file
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mdsn/nexus/lib/source"
+	"github.com/mdsn/nexus/lib/watch"
 )
 
 func MakeSpec(id string) (*os.File, *source.Spec, error) {
@@ -71,8 +72,11 @@ func wait(src *source.Source, deadline time.Duration) error {
 }
 
 func TestAttachFile_OutputLines(t *testing.T) {
-	m := NewManager()
-	defer m.Close()
+	ino, err := watch.NewInotify()
+	if err != nil {
+		t.Fatalf("Inotify: %v", err)
+	}
+	defer ino.Close()
 
 	tmp, spec, err := MakeSpec("output-lines")
 	if err != nil {
@@ -83,7 +87,12 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
-	src, err := m.Attach(ctx, spec)
+	handle, err := ino.Add(spec.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	src, err := Attach(ctx, spec, handle)
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
