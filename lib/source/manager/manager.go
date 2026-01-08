@@ -2,10 +2,11 @@ package manager
 
 import (
 	"context"
-	"os"
+	"errors"
 
 	"github.com/mdsn/nexus/lib/source"
 	"github.com/mdsn/nexus/lib/source/file"
+	"github.com/mdsn/nexus/lib/source/proc"
 	"github.com/mdsn/nexus/lib/watch"
 )
 
@@ -25,29 +26,16 @@ func (m *Manager) Close() error {
 	return m.inotify.Close()
 }
 
-func (m *Manager) AttachFile(ctx context.Context, spec *source.Spec) (*source.Source, error) {
-	handle, err := m.inotify.Add(spec.Path)
-	if err != nil {
-		return nil, err
+func (m *Manager) Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
+	switch spec.Kind {
+	case source.KindProc:
+		return proc.Attach(ctx, spec)
+	case source.KindFile:
+		handle, err := m.inotify.Add(spec.Path)
+		if err != nil {
+			return nil, err
+		}
+		return file.Attach(ctx, spec, handle)
 	}
-
-	fp, err := os.Open(spec.Path)
-	if err != nil {
-		// XXX close handle.Out?
-		return nil, err
-	}
-
-	// TODO source.NewSource(...)
-	src := &source.Source{
-		Id:    spec.Id,
-		Kind:  source.KindFile,
-		Done:  make(chan struct{}),
-		Ready: make(chan struct{}),
-		Out:   make(chan source.Output),
-		Err:   make(chan error),
-	}
-
-	go file.Tail(ctx, src, fp, handle.Out)
-
-	return src, nil
+	return nil, errors.New("unknown SourceKind")
 }

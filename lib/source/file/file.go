@@ -18,7 +18,29 @@ func fileSize(fp *os.File) (int64, error) {
 	return stat.Size(), nil
 }
 
-func Tail(ctx context.Context, src *source.Source, fp *os.File, evC chan watch.Event) {
+func Attach(ctx context.Context, spec *source.Spec, handle *watch.WatchHandle) (*source.Source, error) {
+	fp, err := os.Open(spec.Path)
+	if err != nil {
+		// XXX close handle.Out?
+		return nil, err
+	}
+
+	// TODO source.NewSource(...)
+	src := &source.Source{
+		Id:    spec.Id,
+		Kind:  source.KindFile,
+		Done:  make(chan struct{}),
+		Ready: make(chan struct{}),
+		Out:   make(chan source.Output),
+		Err:   make(chan error),
+	}
+
+	go tail(ctx, src, fp, handle.Out)
+
+	return src, nil
+}
+
+func tail(ctx context.Context, src *source.Source, fp *os.File, evC chan watch.Event) {
 	defer close(src.Done)
 
 	// Start at EOF

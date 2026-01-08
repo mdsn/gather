@@ -83,9 +83,9 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
-	src, err := m.AttachFile(ctx, spec)
+	src, err := m.Attach(ctx, spec)
 	if err != nil {
-		t.Fatalf("AttachFile: %v", err)
+		t.Fatalf("Attach: %v", err)
 	}
 
 	lineC := make(chan []byte, 16)
