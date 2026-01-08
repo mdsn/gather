@@ -1,4 +1,4 @@
-package source
+package file
 
 import (
 	"context"
@@ -7,18 +7,21 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mdsn/nexus/lib/source"
+	"github.com/mdsn/nexus/lib/source/manager"
 )
 
-func MakeSpec(id string) (*os.File, *Spec, error) {
+func MakeSpec(id string) (*os.File, *source.Spec, error) {
 	tmp, err := os.CreateTemp("", "filetest")
 	if err != nil {
 		return nil, nil, err
 	}
-	return tmp, &Spec{Id: id, Kind: KindFile, Path: tmp.Name()}, nil
+	return tmp, &source.Spec{Id: id, Kind: source.KindFile, Path: tmp.Name()}, nil
 }
 
 // Consume lines from a source's Out channel into a line channel
-func consume(ctx context.Context, src *Source, lineC chan []byte) {
+func consume(ctx context.Context, src *source.Source, lineC chan []byte) {
 	defer close(lineC)
 	for out := range src.Out {
 		select {
@@ -59,7 +62,7 @@ func write(f *os.File, b []byte) (n int, err error) {
 }
 
 // Wait for src.Done with the given timeout
-func wait(src *Source, deadline time.Duration) error {
+func wait(src *source.Source, deadline time.Duration) error {
 	select {
 	case <-src.Done:
 	case <-time.After(deadline):
@@ -69,8 +72,8 @@ func wait(src *Source, deadline time.Duration) error {
 }
 
 func TestAttachFile_OutputLines(t *testing.T) {
-	m := NewManager()
-	defer m.inotify.Close()
+	m := manager.NewManager()
+	defer m.Close()
 
 	tmp, spec, err := MakeSpec("output-lines")
 	if err != nil {

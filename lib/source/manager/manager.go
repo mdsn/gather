@@ -1,4 +1,4 @@
-package source
+package manager
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/mdsn/nexus/lib/lines"
+	"github.com/mdsn/nexus/lib/source"
 	"github.com/mdsn/nexus/lib/watch"
 )
 
@@ -21,7 +22,11 @@ func NewManager() *Manager {
 	return &Manager{inotify: ino}
 }
 
-func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
+func (m *Manager) Close() error {
+	return m.inotify.Close()
+}
+
+func (m *Manager) AttachFile(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 	handle, err := m.inotify.Add(spec.Path)
 	if err != nil {
 		return nil, err
@@ -33,12 +38,13 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 		return nil, err
 	}
 
-	src := &Source{
+	// TODO source.NewSource(...)
+	src := &source.Source{
 		Id:    spec.Id,
-		Kind:  KindFile,
+		Kind:  source.KindFile,
 		Done:  make(chan struct{}),
 		Ready: make(chan struct{}),
-		Out:   make(chan Output),
+		Out:   make(chan source.Output),
 		Err:   make(chan error),
 	}
 
