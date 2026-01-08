@@ -1,4 +1,4 @@
-package file
+package manager
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/mdsn/nexus/lib/source"
-	"github.com/mdsn/nexus/lib/source/manager"
 )
 
 func MakeSpec(id string) (*os.File, *source.Spec, error) {
@@ -72,7 +71,7 @@ func wait(src *source.Source, deadline time.Duration) error {
 }
 
 func TestAttachFile_OutputLines(t *testing.T) {
-	m := manager.NewManager()
+	m := NewManager()
 	defer m.Close()
 
 	tmp, spec, err := MakeSpec("output-lines")
