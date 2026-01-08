@@ -1,13 +1,11 @@
 package source
 
 import (
-	"context"
-	"errors"
 	"time"
 )
 
 const (
-	maxLineLength = 4096
+	MaxLineLength = 4096
 )
 
 type SourceKind uint8
@@ -47,19 +45,4 @@ type Spec struct {
 	Kind SourceKind
 	Path string
 	Args []string
-}
-
-func Attach(ctx context.Context, spec *Spec) (*Source, error) {
-	switch spec.Kind {
-	case KindFile:
-		return attachFile(ctx, spec)
-	case KindProc:
-		return attachProc(ctx, spec)
-	default:
-		return nil, errors.New("unknown source kind")
-	}
-}
-
-func attachFile(ctx context.Context, spec *Spec) (*Source, error) {
-	return nil, nil
 }

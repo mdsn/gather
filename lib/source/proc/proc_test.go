@@ -1,4 +1,4 @@
-package source
+package proc
 
 import (
 	"context"
@@ -8,9 +8,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mdsn/nexus/lib/source"
 )
 
-func Consume(src *Source, outC chan []byte) {
+func Consume(src *source.Source, outC chan []byte) {
 	var out []byte
 	for msg := range src.Out {
 		out = append(out, msg.Bytes...)
@@ -26,15 +28,15 @@ func Map[T any, R any](xs []T, f func(T) R) []R {
 	return ys
 }
 
-func NewSpec(id, cmd string, args []string) *Spec {
-	return &Spec{Id: id, Kind: KindProc, Path: cmd, Args: args}
+func NewSpec(id, cmd string, args []string) *source.Spec {
+	return &source.Spec{Id: id, Kind: source.KindProc, Path: cmd, Args: args}
 }
 
 func TestAttachProc_NoOutput(t *testing.T) {
 	ctx := t.Context()
 	spec := NewSpec("true", "true", []string{})
 
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 
 	outC := make(chan []byte)
 	go Consume(src, outC)
@@ -49,8 +51,8 @@ func TestAttachProc_NoOutput(t *testing.T) {
 	if src.Id != "true" {
 		t.Fatal("Id =", src.Id, "wanted true")
 	}
-	if src.Kind != KindProc {
-		t.Fatal("Kind =", src.Kind, "wanted", KindProc)
+	if src.Kind != source.KindProc {
+		t.Fatal("Kind =", src.Kind, "wanted", source.KindProc)
 	}
 
 	select {
@@ -71,7 +73,7 @@ func TestAttachProc_NoOutput(t *testing.T) {
 func TestAttachProc_FailsCommandNotFound(t *testing.T) {
 	ctx := t.Context()
 	spec := NewSpec("nonexistent", "berengario", []string{})
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 
 	if err == nil {
 		t.Fatalf("err is nil")
@@ -86,7 +88,7 @@ func TestAttachProc_RedirectsStdout(t *testing.T) {
 	const want = "yes! radiant lyre speak to me become a voice"
 	spec := NewSpec("sappho", "echo", []string{"-n", want})
 
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 	cmd := fmt.Sprintf("echo '%s'; echo '%s'; echo '%s'", lines[0], lines[1], lines[2])
 	spec := NewSpec("pound", "sh", []string{"-c", cmd})
 
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
@@ -137,14 +139,14 @@ func TestAttachProc_TruncatesLongLine(t *testing.T) {
 	ctx := t.Context()
 	// As of today, bufio.Reader defaultBufSize is 4096. Build a larger string
 	// than that and see that it is truncated.
-	wantLen := maxLineLength
+	wantLen := source.MaxLineLength
 	strLen := 2 * wantLen
 	alphabet := "a b c u v w x y z ' '"
 	// No newline
 	cmd := fmt.Sprintf("echo -n \"$(shuf -er -n %d %s | tr -d '\\n')\"", strLen, alphabet)
 	spec := NewSpec("long", "sh", []string{"-c", cmd})
 
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
@@ -164,7 +166,7 @@ func TestAttachProc_LastLineNoNewline(t *testing.T) {
 	want := []string{"abc\n", "def\n", "ghi"}
 	spec := NewSpec("newline", "sh", []string{"-c", "echo abc; echo def; echo -n ghi"})
 
-	src, err := attachProc(ctx, spec)
+	src, err := Attach(ctx, spec)
 	if err != nil {
 		t.Fatalf("got err: %v", err)
 	}
@@ -183,7 +185,7 @@ func TestAttachProc_CancelContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	spec := NewSpec("terminate", "sh", []string{"-c", "sleep 10; echo hullaballoo"})
 
-	src, _ := attachProc(ctx, spec)
+	src, _ := Attach(ctx, spec)
 
 	outC := make(chan []byte)
 	go Consume(src, outC)
@@ -208,11 +210,11 @@ func TestAttachProc_MultipleSources(t *testing.T) {
 	spec1 := NewSpec("fst", "sh", []string{"-c", "echo one; echo two; echo three"})
 	spec2 := NewSpec("snd", "sh", []string{"-c", "echo 111; echo 222; echo 33333"})
 
-	src1, _ := attachProc(ctx, spec1)
-	src2, _ := attachProc(ctx, spec2)
+	src1, _ := Attach(ctx, spec1)
+	src2, _ := Attach(ctx, spec2)
 
-	outC := make(chan Output)
-	consume := func(procOut chan Output) {
+	outC := make(chan source.Output)
+	consume := func(procOut chan source.Output) {
 		for msg := range procOut {
 			outC <- msg
 		}
@@ -227,7 +229,7 @@ func TestAttachProc_MultipleSources(t *testing.T) {
 		close(outC)
 	}()
 
-	var msgs []Output
+	var msgs []source.Output
 	for msg := range outC {
 		msgs = append(msgs, msg)
 	}
@@ -247,7 +249,7 @@ func TestAttachProc_ChildKeepsPipeOpen(t *testing.T) {
 	// end of the pipe and keeps it open
 	spec := NewSpec("fork", "sh", []string{"-c", "sleep 1000 &"})
 
-	src, _ := attachProc(ctx, spec)
+	src, _ := Attach(ctx, spec)
 
 	select {
 	case <-src.Done:

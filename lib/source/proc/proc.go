@@ -1,4 +1,4 @@
-package source
+package proc
 
 import (
 	"bufio"
@@ -8,13 +8,15 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/mdsn/nexus/lib/source"
 )
 
 var (
 	streamGracePeriod = time.Second
 )
 
-func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
+func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 	cmd := exec.CommandContext(ctx, spec.Path, spec.Args...)
 
 	// Create pipes
@@ -40,12 +42,12 @@ func attachProc(ctx context.Context, spec *Spec) (*Source, error) {
 	}
 
 	// Create *Source instance
-	src := &Source{
+	src := &source.Source{
 		Id:   spec.Id,
-		Kind: KindProc,
+		Kind: source.KindProc,
 		// XXX Ready barrier?
 		Done: make(chan struct{}),
-		Out:  make(chan Output),
+		Out:  make(chan source.Output),
 		Err:  make(chan error),
 	}
 
@@ -87,7 +89,7 @@ type ProcStream struct {
 	Stop chan struct{}
 }
 
-func stream(pipe io.ReadCloser, out chan Output) *ProcStream {
+func stream(pipe io.ReadCloser, out chan source.Output) *ProcStream {
 	st := &ProcStream{
 		Done: make(chan struct{}),
 		Stop: make(chan struct{}),
@@ -99,11 +101,11 @@ func stream(pipe io.ReadCloser, out chan Output) *ProcStream {
 	return st
 }
 
-func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- struct{}) {
+func read(pipe io.Reader, out chan<- source.Output, stop <-chan struct{}, done chan<- struct{}) {
 	// Signal that streaming is done.
 	defer close(done)
 
-	rd := bufio.NewReaderSize(pipe, maxLineLength)
+	rd := bufio.NewReaderSize(pipe, source.MaxLineLength)
 	for {
 		// This call blocks until the pipe is closed. Includes delimiter.
 		bytes, err := rd.ReadSlice('\n')
@@ -115,7 +117,7 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 
 			// TODO signal truncation if ErrBufferFull; output can indicate
 			// with ellipsis.
-			msg := Output{CapturedAt: time.Now(), Bytes: cp}
+			msg := source.Output{CapturedAt: time.Now(), Bytes: cp}
 
 			// Preempt writing if a Stop signal arrived.
 			select {
@@ -142,7 +144,7 @@ func read(pipe io.Reader, out chan<- Output, stop <-chan struct{}, done chan<- s
 }
 
 // Close the pipe and out channel.
-func cleanup(pipe io.Closer, out chan Output, st *ProcStream) {
+func cleanup(pipe io.Closer, out chan source.Output, st *ProcStream) {
 	defer close(out)
 	select {
 	// Streaming goroutine exited on its own. Close the pipe and get out.
