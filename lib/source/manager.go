@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/mdsn/nexus/lib/lines"
 	"github.com/mdsn/nexus/lib/watch"
 )
 
@@ -50,7 +51,7 @@ func (m *Manager) AttachFile(ctx context.Context, spec *Spec) (*Source, error) {
 			return // XXX ?
 		}
 
-		lb := NewLineBuffer(4096 * 2)
+		lb := lines.NewLineBuffer(4096 * 2)
 		buf := make([]byte, 4096)
 
 		// Start listening

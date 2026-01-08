@@ -1,4 +1,4 @@
-package source
+package lines
 
 type ErrFull struct{}
 
