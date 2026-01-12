@@ -1,10 +1,11 @@
 package watch
 
 import (
-	"golang.org/x/sys/unix"
 	"os"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestNewInotify_HasFd(t *testing.T) {

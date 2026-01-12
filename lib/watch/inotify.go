@@ -10,6 +10,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// XXX When a watch descriptor is removed by calling inotify_rm_watch(2) (or
+// because a watch file is deleted or the filesystem that contains it is
+// unmounted), any pending unread events for that watch descriptor remain
+// available to read.
+
 const (
 	InotifyBufferSize = 4096
 	// TODO IN_IGNORED can also happen when the os clears a watch due to delete

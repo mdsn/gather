@@ -66,6 +66,7 @@ outer:
 
 		sz, err := fileSize(fp)
 		if err != nil {
+			// XXX src.Err
 			return
 		}
 
@@ -78,17 +79,20 @@ outer:
 		// read file from offset
 		_, err = fp.Seek(offset, 0)
 		if err != nil {
+			// XXX src.Err
 			return
 		}
 
 		for {
 			buf = buf[:cap(buf)]
 
+			// TODO pread(2)?
 			n, err := fp.Read(buf)
 			if n == 0 && err == io.EOF {
 				break
 			}
 			if err != nil {
+				// XXX src.Err
 				return
 			}
 

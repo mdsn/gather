@@ -128,3 +128,9 @@ func TestAttachFile_OutputLines(t *testing.T) {
 		t.Fatalf("unexpected output: '%s' '%s'", line1, line2)
 	}
 }
+
+// TODO test multiple files/sources
+// TODO test file truncated
+// TODO test ino.Add -> rm file -> Attach (race situation)
+// TODO test line truncation
+// TODO test lingering buffered partial line
