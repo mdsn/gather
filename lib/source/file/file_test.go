@@ -130,6 +130,105 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	}
 }
 
+func TestAttachFile_MultipleFiles(t *testing.T) {
+	ino, err := watch.NewInotify()
+	if err != nil {
+		t.Fatalf("Inotify: %v", err)
+	}
+	defer ino.Close()
+
+	tmp1, spec1, err := MakeSpec("multiple-files1")
+	if err != nil {
+		t.Fatalf("MakeSpec: %v", err)
+	}
+	defer os.Remove(spec1.Path)
+
+	tmp2, spec2, err := MakeSpec("multiple-files2")
+	if err != nil {
+		t.Fatalf("MakeSpec: %v", err)
+	}
+	defer os.Remove(spec2.Path)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	handle1, err := ino.Add(spec1.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	handle2, err := ino.Add(spec2.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	src1, err := Attach(ctx, spec1, handle1)
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	src2, err := Attach(ctx, spec2, handle2)
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	line1C := make(chan []byte, 16)
+	go consume(ctx, src1, line1C)
+
+	line2C := make(chan []byte, 16)
+	go consume(ctx, src2, line2C)
+
+	<-src1.Ready
+	<-src2.Ready
+
+	line1 := "These termagants, these unsexed viragoes, these bipeds!"
+	_, err = write(tmp1, []byte(fmt.Sprintf("%s\n", line1)))
+	if err != nil {
+		t.Fatalf("write 1: %v", err)
+	}
+
+	line2 := "Thou that spellest ever gold from my dross"
+	_, err = write(tmp2, []byte(fmt.Sprintf("%s\n", line2)))
+	if err != nil {
+		t.Fatalf("write 2: %v", err)
+	}
+
+	lines1, err := collect(1, line1C, time.Second)
+	if err != nil {
+		t.Fatalf("collect 1: %v", err)
+	}
+
+	lines2, err := collect(1, line2C, time.Second)
+	if err != nil {
+		t.Fatalf("collect 2: %v", err)
+	}
+
+	cancel()
+	err = wait(src1, time.Second)
+	if err != nil {
+		t.Fatalf("wait 1: %v", err)
+	}
+
+	err = wait(src2, time.Second)
+	if err != nil {
+		t.Fatalf("wait 2: %v", err)
+	}
+
+	if len(lines1) != 1 {
+		t.Fatal("lines 1: wrong length, want 1, got", len(lines1))
+	}
+	if len(lines2) != 1 {
+		t.Fatal("lines 2: wrong length, want 1, got", len(lines2))
+	}
+
+	if string(lines1[0]) != line1 {
+		t.Fatalf("line 1: unexpected output: '%s'", string(lines1[0]))
+	}
+	if string(lines2[0]) != line2 {
+		t.Fatalf("line 2: unexpected output: '%s'", string(lines2[0]))
+	}
+}
+
 func TestAttachFile_TruncateFile(t *testing.T) {
 	t.Skip("non-deterministic behavior; see 03-truncate.md")
 
@@ -298,7 +397,4 @@ func TestAttachFile_TruncatePastEOF(t *testing.T) {
 	}
 }
 
-// TODO test multiple files/sources
 // TODO test ino.Add -> rm file -> Attach (race situation)
-// TODO test line truncation
-// TODO test lingering buffered partial line
