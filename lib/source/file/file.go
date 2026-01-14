@@ -19,7 +19,7 @@ func fileSize(fp *os.File) (int64, error) {
 }
 
 func Attach(ctx context.Context, spec *source.Spec, handle *watch.WatchHandle) (*source.Source, error) {
-	fp, err := os.Open(spec.Path)
+	fp, err := os.OpenFile(spec.Path, os.O_RDONLY, 0)
 	if err != nil {
 		// XXX close handle.Out?
 		return nil, err

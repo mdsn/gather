@@ -397,4 +397,49 @@ func TestAttachFile_TruncatePastEOF(t *testing.T) {
 	}
 }
 
-// TODO test ino.Add -> rm file -> Attach (race situation)
+// Test ino.Add -> rm file -> Attach (race situation)
+// Inotify does not open a descriptor to the inode, so (assuming no other
+// process has an open descriptor to it) the OS can destroy it. Attaching will
+// try to open the path and fail.
+func TestAttachFile_RmBeforeAttach(t *testing.T) {
+	ino, err := watch.NewInotify()
+	if err != nil {
+		t.Fatalf("Inotify: %v", err)
+	}
+	defer ino.Close()
+
+	// Create a tmp file
+	tmp, spec, err := MakeSpec("rm-before-attach")
+	if err != nil {
+		t.Fatalf("MakeSpec: %v", err)
+	}
+	defer os.Remove(spec.Path)
+
+	// Add a watch on inotify
+	handle, err := ino.Add(spec.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	// Close the file and remove it
+	err = tmp.Close()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	err = os.Remove(spec.Path)
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	// Verify the file does not exist
+	_, err = os.OpenFile(spec.Path, os.O_RDONLY, 0600)
+	if err == nil {
+		t.Fatalf("expected file %s not to exist", spec.Path)
+	}
+
+	// Try to attach, see it fail.
+	_, err = Attach(t.Context(), spec, handle)
+	if err == nil {
+		t.Fatalf("Expected an error on Attach")
+	}
+}
