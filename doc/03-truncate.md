@@ -19,3 +19,7 @@ Suppose both events are coalesced, then the watch reads an `IN_MODIFY`. It sees 
     kstroke
 
 This illustrates the kind of things that can happen because of the loss of information of the previous states of the file.
+
+## Truncating past EOF
+
+If `truncate(2)` is given a size larger than the current file size, the file is extended and the OS arranges to return null bytes when reading those positions. The null bytes are not necessarily stored; the file system may support logical holes in files. The behavior when seeing null bytes is the same as with any other byte: stream it right through. It will be weird when rendered but it is true to the input.

@@ -129,8 +129,101 @@ func TestAttachFile_OutputLines(t *testing.T) {
 	}
 }
 
+func TestAttachFile_TruncateFile(t *testing.T) {
+	t.Skip("non-deterministic behavior; see 03-truncate.md")
+
+	ino, err := watch.NewInotify()
+	if err != nil {
+		t.Fatalf("Inotify: %v", err)
+	}
+	defer ino.Close()
+
+	tmp, spec, err := MakeSpec("truncate")
+	if err != nil {
+		t.Fatalf("MakeSpec: %v", err)
+	}
+	defer os.Remove(spec.Path)
+
+	// Write and sync before attaching to the file to simulate previous content.
+	line1 := "To those who gaze on thee what language could they speak?" // len 57
+	_, err = write(tmp, []byte(line1))
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	handle, err := ino.Add(spec.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	src, err := Attach(ctx, spec, handle)
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	lineC := make(chan []byte, 16)
+	go consume(ctx, src, lineC)
+	<-src.Ready
+
+	// Truncate file
+	err = tmp.Truncate(0)
+	if err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	// XXX truncate(2) delivers IN_MODIFY; if tail() is too slow to read it out
+	// of the event stream and the write below happens, the kernel coalesces
+	// both IN_MODIFY into 1, it never updates the offset, and reads from 57 to
+	// 64. We somehow need a different approach or a different guarantee.
+
+	// truncate(2) does not change the file offset. Simulate a process opening
+	// the file after truncation by seeking to 0.
+	_, err = tmp.Seek(0, 0)
+	if err != nil {
+		t.Fatalf("seek: %v", err)
+	}
+
+	// Write another line. It comes up in `lines`.
+	line2 := "You can lead a horse to water, but you can't make him backstroke" // len 64
+	_, err = write(tmp, []byte(fmt.Sprintf("%s\n", line2)))
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	lines, err := collect(1, lineC, time.Second)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	cancel()
+
+	err = wait(src, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(lines) != 1 {
+		t.Fatal("wrong length, want 1, got", len(lines))
+	}
+	if string(lines[0]) != line2 {
+		t.Fatalf("unexpected output: '%s'", lines[0])
+	}
+
+	size, err := fileSize(tmp)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	if int(size) != len(line2) {
+		t.Fatal("wrong file size, want", len(line2), "got", size)
+	}
+}
+
+// TODO test truncate past EOF (hole in file)
 // TODO test multiple files/sources
-// TODO test file truncated
 // TODO test ino.Add -> rm file -> Attach (race situation)
 // TODO test line truncation
 // TODO test lingering buffered partial line
