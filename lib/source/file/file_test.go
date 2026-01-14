@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -222,7 +223,81 @@ func TestAttachFile_TruncateFile(t *testing.T) {
 	}
 }
 
-// TODO test truncate past EOF (hole in file)
+func TestAttachFile_TruncatePastEOF(t *testing.T) {
+	ino, err := watch.NewInotify()
+	if err != nil {
+		t.Fatalf("Inotify: %v", err)
+	}
+	defer ino.Close()
+
+	tmp, spec, err := MakeSpec("truncate-extend")
+	if err != nil {
+		t.Fatalf("MakeSpec: %v", err)
+	}
+	defer os.Remove(spec.Path)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	handle, err := ino.Add(spec.Path)
+	if err != nil {
+		t.Fatalf("inotify Add: %v", err)
+	}
+
+	src, err := Attach(ctx, spec, handle)
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	lineC := make(chan []byte, 16)
+	go consume(ctx, src, lineC)
+	<-src.Ready
+
+	// Write first few bytes.
+	_, err = write(tmp, []byte("dingbats")) // len 8
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Make a hole; it's now 8 bytes of data and 8 null bytes.
+	err = tmp.Truncate(16)
+	if err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	// Seek to the end; truncate(2) does not change the file offset.
+	tmp.Seek(16, 0)
+
+	// Write more data after the hole.
+	_, err = write(tmp, []byte("wingding\n")) // len 8 (+ newline)
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	lines, err := collect(1, lineC, time.Second)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	cancel()
+
+	err = wait(src, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(lines) != 1 {
+		t.Fatal("wrong number of lines, want 1, got", len(lines))
+	}
+	want := slices.Concat(
+		[]byte("dingbats"),
+		[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+		[]byte("wingding"),
+	)
+	if slices.Compare(lines[0], want) != 0 {
+		t.Fatalf("unexpected output: '%s'", lines[0])
+	}
+}
+
 // TODO test multiple files/sources
 // TODO test ino.Add -> rm file -> Attach (race situation)
 // TODO test line truncation
