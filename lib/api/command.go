@@ -24,11 +24,11 @@ const (
 )
 
 type Command struct {
-	kind   CommandKind
-	target CommandTarget
-	id     string
-	path   string
-	args   []string
+	Kind   CommandKind
+	Target CommandTarget
+	Id     string
+	Path   string
+	Args   []string
 	sentAt time.Time
 }
 
@@ -58,19 +58,19 @@ func parseAdd(toks []string) (*Command, error) {
 	}
 
 	cmd := &Command{
-		kind:   CommandKindAdd,
-		id:     toks[1],
-		path:   toks[2],
+		Kind:   CommandKindAdd,
+		Id:     toks[1],
+		Path:   toks[2],
 		sentAt: time.Now(),
 	}
 
 	switch toks[0] {
 	case "file":
-		cmd.target = CommandTargetFile
+		cmd.Target = CommandTargetFile
 		return cmd, nil
 	case "proc":
-		cmd.target = CommandTargetProc
-		cmd.args = toks[3:]
+		cmd.Target = CommandTargetProc
+		cmd.Args = toks[3:]
 		return cmd, nil
 	default:
 		return nil, errors.New(fmt.Sprintf("add: unknown source type '%s'", toks[0]))
@@ -83,8 +83,8 @@ func parseRm(toks []string) (*Command, error) {
 	}
 
 	cmd := &Command{
-		kind:   CommandKindRm,
-		id:     toks[0],
+		Kind:   CommandKindRm,
+		Id:     toks[0],
 		sentAt: time.Now(),
 	}
 

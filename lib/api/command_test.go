@@ -41,28 +41,28 @@ func TestParseCommand_AddFile(t *testing.T) {
 		t.Fatal("nil cmd")
 	}
 
-	if cmd.kind != CommandKindAdd {
+	if cmd.Kind != CommandKindAdd {
 		t.Fatal("wrong command kind")
 	}
 
-	if cmd.target != CommandTargetFile {
+	if cmd.Target != CommandTargetFile {
 		t.Fatal("wrong command target")
 	}
 
-	if cmd.id != "myFile" {
-		t.Fatal("wrong command id:", cmd.id)
+	if cmd.Id != "myFile" {
+		t.Fatal("wrong command id:", cmd.Id)
 	}
 
-	if cmd.path != "/var/log/syslog" {
-		t.Fatal("wrong command path:", cmd.path)
+	if cmd.Path != "/var/log/syslog" {
+		t.Fatal("wrong command path:", cmd.Path)
 	}
 
 	if cmd.sentAt.IsZero() {
 		t.Fatal("sentAt not initialized")
 	}
 
-	if len(cmd.args) != 0 {
-		t.Fatal("unexpected args:", cmd.args)
+	if len(cmd.Args) != 0 {
+		t.Fatal("unexpected args:", cmd.Args)
 	}
 }
 
@@ -88,28 +88,28 @@ func TestParseCommand_AddProc(t *testing.T) {
 				t.Fatal("nil cmd")
 			}
 
-			if cmd.kind != CommandKindAdd {
+			if cmd.Kind != CommandKindAdd {
 				t.Fatal("wrong command kind")
 			}
 
-			if cmd.target != CommandTargetProc {
+			if cmd.Target != CommandTargetProc {
 				t.Fatal("wrong command target")
 			}
 
-			if cmd.id != "myWorker" {
-				t.Fatal("wrong command id:", cmd.id)
+			if cmd.Id != "myWorker" {
+				t.Fatal("wrong command id:", cmd.Id)
 			}
 
-			if cmd.path != "./worker" {
-				t.Fatal("wrong command path:", cmd.path)
+			if cmd.Path != "./worker" {
+				t.Fatal("wrong command path:", cmd.Path)
 			}
 
 			if cmd.sentAt.IsZero() {
 				t.Fatal("sentAt not initialized")
 			}
 
-			if len(cmd.args) != tc.argc {
-				t.Fatal("wrong number of args:", cmd.args)
+			if len(cmd.Args) != tc.argc {
+				t.Fatal("wrong number of args:", cmd.Args)
 			}
 		})
 	}
@@ -137,19 +137,19 @@ func TestParseCommand_Rm(t *testing.T) {
 			t.Fatal("nil cmd")
 		}
 
-		if cmd.kind != CommandKindRm {
+		if cmd.Kind != CommandKindRm {
 			t.Fatal("wrong command kind")
 		}
 
-		if cmd.target != CommandTargetUnknown {
+		if cmd.Target != CommandTargetUnknown {
 			t.Fatal("wrong command target")
 		}
 
-		if cmd.id != "myWorker" {
-			t.Fatal("wrong command id:", cmd.id)
+		if cmd.Id != "myWorker" {
+			t.Fatal("wrong command id:", cmd.Id)
 		}
 
-		if len(cmd.path) != 0 {
+		if len(cmd.Path) != 0 {
 			t.Fatal("unexpected command path")
 		}
 
@@ -157,8 +157,8 @@ func TestParseCommand_Rm(t *testing.T) {
 			t.Fatal("sentAt not initialized")
 		}
 
-		if len(cmd.args) != 0 {
-			t.Fatal("unexpected args:", cmd.args)
+		if len(cmd.Args) != 0 {
+			t.Fatal("unexpected args:", cmd.Args)
 		}
 	}
 
