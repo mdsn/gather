@@ -6,17 +6,16 @@ interrupting a tailing session.
 
 ## Design approach
 
-The project is implemented as a single Go binary. It receives commands from a
-Unix domain socket it creates on startup. Nexus understands a simple text based
-protocol via this socket. The API is intentionally small; it covers adding and
-removing each kind of source.
+The project is implemented as a single Go binary. It receives commands from
+stdin. Nexus understands a simple text based protocol. The API is intentionally
+small; it covers adding and removing each kind of source.
 
 A library implements the functionality to attach to sources and forward their
 output to the main binary.
 
   cmd/nx                The main binary
   lib/source            Library to get output from file and process sources
-  lib/api               Command API via UNIX domain socket
+  lib/api               Command API
 
 ### cmd/nx
 
@@ -83,9 +82,9 @@ file sources, it closes the file when the context is done.
 
 ### lib/api
 
-The API library provides functions to create the socket and parse commands into
-types. The main binary does not operate in terms of strings; it understands the
-types provided by `lib/api`.
+The API library provides functions to parse commands into types. The main
+binary does not operate in terms of strings; it understands the types provided
+by `lib/api`.
 
 ```go
   type CommandTarget uint8
@@ -139,12 +138,11 @@ Output is split on `\n`; output over some yet undetermined length is truncated.
 
 ## API
 
-Nexus understands a simple API via a Unix domain socket. These commands
-constitute the API:
+Nexus understands a simple API via stdin. These commands constitute the API:
 
-    add myFile file /path/to/file       Start tailing a new file.
+    add file myFile:/path/to/file       Start tailing a new file.
     rm myFile                           Stop tailing a file.
-    add myCmd run -- cmd arg1 arg2      Run a command and tail its output.
+    add run myCmd:cmd arg1 arg2         Run a command and tail its output.
     rm myCmd                            Terminate a command to stop tailing it.
 
 The `add` command takes a type, which can be `file` or `proc`, a string
@@ -161,7 +159,7 @@ named pipes and sockets. Nexus only accepts files and processes.
 
 An interactive UI would allow the user to enter commands directly, in the style
 of less or vi. Instead of implementing a full fledged line editor, nexus gets
-input via a Unix socket.
+input via stdin. It can be redirected to a FIFO to get input lines from a file.
 
 For process sources, nexus captures stdout and stderr. It logs everything to
 stdout. When terminating a running process, only the spawned child is
