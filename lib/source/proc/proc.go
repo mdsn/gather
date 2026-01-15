@@ -25,6 +25,7 @@ func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 		return nil, err
 	}
 
+	// TODO 01-design says both stdin and stderr are streamed and aggregated.
 	// Assign write end to the child
 	cmd.Stdout = wp
 

@@ -115,15 +115,21 @@ A command handler will dispatch based on `Kind` to concrete functions to handle
 
 These are command examples:
 
+    # Create a fifo to give nx commands
+    $ mkfifo /tmp/nxctl
+
+    # Run nx with its input source
+    $ nx < /tmp/nxctl
+
     # Tail syslog
-    $ echo 'add syslog file /var/log/syslog' | nc -U /tmp/nexus.sock
+    $ echo 'add file syslog /var/log/syslog' > /tmp/nxctl
 
     # Tail a hypothetical worker
-    $ echo 'add worker run -- ./worker --queue=emails' | nc -U ...
+    $ echo 'add proc emails ./worker --queue=emails' > /tmp/nxctl
 
     # Remove both
-    $ echo 'rm syslog' | nc -U ...
-    $ echo 'rm worker' | nc -U ...
+    $ echo 'rm syslog' > /tmp/nxctl
+    $ echo 'rm worker' > /tmp/nxctl
 
 The command is of the form `add <id> <type> <path>`.
 
@@ -140,9 +146,9 @@ Output is split on `\n`; output over some yet undetermined length is truncated.
 
 Nexus understands a simple API via stdin. These commands constitute the API:
 
-    add file myFile:/path/to/file       Start tailing a new file.
+    add file myFile /path/to/file       Start tailing a new file.
     rm myFile                           Stop tailing a file.
-    add run myCmd:cmd arg1 arg2         Run a command and tail its output.
+    add proc myCmd cmd arg1 arg2        Run a command and tail its output.
     rm myCmd                            Terminate a command to stop tailing it.
 
 The `add` command takes a type, which can be `file` or `proc`, a string
