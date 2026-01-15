@@ -43,7 +43,13 @@ type Command struct {
 ## Design
 
 The application spins up a goroutine to block on stdin, parse one command at a
-time, and send either the typed `Command` or an error through a channel. A
-separate goroutine sits on the other end of the command/error channel. On
-successfully parsed commands it manipulates the `*Manager` to attach/remove
-sources, on errors it prints to stderr.
+time, send the typed `Command` a channel, or print an error to stderr. A
+separate goroutine sits on the other end of the command channel. It manipulates
+the `*Manager` to attach/remove sources.
+
+    stdin reader goroutine
+      └─ parse line → Command | error
+           ├─ error → print immediately
+           └─ Command → send on channel
+                        ↓
+                  Manager goroutine (single owner of state)
