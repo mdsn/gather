@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/mdsn/nexus/lib/api"
@@ -27,13 +28,16 @@ func main() {
 	cmdC := make(chan *api.Command)
 	go read(cmdC)
 	go execute(ctx, cmdC, m)
+	// XXX call drain() synchronously to use it as a blocking barrier. Since
+	// read() is not context-aware it does not get canceled by the signal setup
+	// above, and the process never exits.
 	drain(ctx, m)
 }
 
 func read(cmdC chan *api.Command) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		// XXX make this read ctx-cancellable?
+		// XXX make this read ctx-cancellable
 		line, err := reader.ReadString('\n')
 
 		if err == io.EOF {
@@ -43,6 +47,7 @@ func read(cmdC chan *api.Command) {
 			continue
 		}
 
+		line = strings.TrimSpace(line)
 		cmd, err := api.ParseCommand(line)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "parse: %v", err)
