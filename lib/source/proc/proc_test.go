@@ -11,14 +11,6 @@ import (
 	"github.com/mdsn/nexus/lib/source"
 )
 
-func Consume(src *source.Source, outC chan []byte) {
-	var out []byte
-	for msg := range src.Out {
-		out = append(out, msg.Bytes...)
-	}
-	outC <- out
-}
-
 // Consume lines from a source's Out channel into a line channel
 func consume(ctx context.Context, src *source.Source, lineC chan []byte) {
 	defer close(lineC)
@@ -71,7 +63,7 @@ func TestAttachProc_NoOutput(t *testing.T) {
 	src, err := Attach(ctx, spec)
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 	out := <-outC
 
 	if err != nil {
@@ -126,7 +118,7 @@ func TestAttachProc_RedirectsStdout(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 
 	<-src.Done
 
@@ -184,7 +176,7 @@ func TestAttachProc_TruncatesLongLine(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 
 	out := <-outC
 	outStr := string(out)
@@ -226,7 +218,7 @@ func TestAttachProc_CancelContext(t *testing.T) {
 	src, _ := Attach(ctx, spec)
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 
 	cancel()
 
