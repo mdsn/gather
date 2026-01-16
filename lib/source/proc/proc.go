@@ -116,8 +116,6 @@ func read(pipe io.Reader, src *source.Source, ctl *ProcStream) {
 			cp := make([]byte, n-1) // ReadSlice includes the newline
 			copy(cp, bytes[:n-1])
 
-			// TODO signal truncation if ErrBufferFull; output can indicate
-			// with ellipsis.
 			msg := source.Output{Id: src.Id, CapturedAt: time.Now(), Bytes: cp}
 
 			// Preempt writing if a Stop signal arrived.

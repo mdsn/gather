@@ -56,7 +56,7 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 
 		src, err = file.Attach(ctx, spec, handle)
 		if err != nil {
-			// XXX clean inotify
+			err = errors.Join(err, m.inotify.Rm(handle))
 			return fmt.Errorf("attach: %v", err)
 		}
 	default:
@@ -67,6 +67,7 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 	m.sources[src.Id] = src
 	m.mu.Unlock()
 
+	// Fan into the manager's Events channel.
 	go func() {
 		for {
 			select {
