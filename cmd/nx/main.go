@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/mdsn/nexus/lib/api"
@@ -22,10 +23,13 @@ func main() {
 	m := manager.NewManager()
 	defer m.Close()
 
+	var wg sync.WaitGroup
+
 	cmdC := make(chan *api.Command)
-	go read(cmdC) // ctx?
-	go execute(ctx, cmdC, m)
-	drain(ctx, m)
+	wg.Go(func() { read(cmdC) }) // ctx?
+	wg.Go(func() { execute(ctx, cmdC, m) })
+	wg.Go(func() { drain(ctx, m) })
+	wg.Wait()
 }
 
 func read(cmdC chan *api.Command) {
