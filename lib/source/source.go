@@ -16,6 +16,7 @@ const (
 )
 
 type Output struct {
+	Id         string
 	CapturedAt time.Time
 	Bytes      []byte
 }
@@ -35,6 +36,7 @@ func (src *Source) Send(b []byte) {
 	buf := make([]byte, len(b))
 	copy(buf, b)
 	src.Out <- Output{
+		Id:         src.Id,
 		CapturedAt: time.Now(),
 		Bytes:      buf,
 	}

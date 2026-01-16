@@ -25,8 +25,7 @@ func main() {
 	cmdC := make(chan *api.Command)
 	go read(cmdC) // ctx?
 	go execute(ctx, cmdC, m)
-
-	fmt.Println("lol")
+	drain(ctx, m)
 }
 
 func read(cmdC chan *api.Command) {
@@ -64,6 +63,17 @@ func execute(ctx context.Context, cmdC chan *api.Command, m *manager.Manager) {
 			// ...
 		default:
 			panic("execute: unknown command kind")
+		}
+	}
+}
+
+func drain(ctx context.Context, m *manager.Manager) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev := <-m.Events:
+			fmt.Printf("%s: %s\n", ev.Id, string(ev.Bytes))
 		}
 	}
 }

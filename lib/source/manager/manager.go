@@ -16,6 +16,8 @@ type Manager struct {
 	// Synchronizes access to sources
 	mu      sync.Mutex
 	sources map[string]*source.Source
+	// Output from sources is fanned into this channel
+	Events chan source.Output
 }
 
 func NewManager() *Manager {
@@ -61,6 +63,17 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 	m.mu.Lock()
 	m.sources[src.Id] = src
 	m.mu.Unlock()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case out := <-src.Out:
+				m.Events <- out
+			}
+		}
+	}()
 
 	return nil
 }
