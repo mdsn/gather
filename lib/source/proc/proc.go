@@ -17,6 +17,7 @@ var (
 )
 
 func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(ctx, spec.Path, spec.Args...)
 
 	// Create pipes
@@ -47,9 +48,10 @@ func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 		Id:   spec.Id,
 		Kind: source.KindProc,
 		// XXX Ready barrier?
-		Done: make(chan struct{}),
-		Out:  make(chan source.Output),
-		Err:  make(chan error),
+		Done:   make(chan struct{}),
+		Out:    make(chan source.Output),
+		Err:    make(chan error),
+		Cancel: cancel,
 	}
 
 	// Start streaming output into the channel

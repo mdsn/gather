@@ -19,6 +19,7 @@ func fileSize(fp *os.File) (int64, error) {
 }
 
 func Attach(ctx context.Context, spec *source.Spec, handle *watch.WatchHandle) (*source.Source, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	fp, err := os.OpenFile(spec.Path, os.O_RDONLY, 0)
 	if err != nil {
 		// XXX close handle.Out?
@@ -27,12 +28,13 @@ func Attach(ctx context.Context, spec *source.Spec, handle *watch.WatchHandle) (
 
 	// TODO source.NewSource(...)
 	src := &source.Source{
-		Id:    spec.Id,
-		Kind:  source.KindFile,
-		Done:  make(chan struct{}),
-		Ready: make(chan struct{}),
-		Out:   make(chan source.Output),
-		Err:   make(chan error),
+		Id:     spec.Id,
+		Kind:   source.KindFile,
+		Done:   make(chan struct{}),
+		Ready:  make(chan struct{}),
+		Out:    make(chan source.Output),
+		Err:    make(chan error),
+		Cancel: cancel,
 	}
 
 	go tail(ctx, src, fp, handle.Out)

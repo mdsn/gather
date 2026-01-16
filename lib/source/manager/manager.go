@@ -88,3 +88,19 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 
 	return nil
 }
+
+func (m *Manager) Remove(id string) error {
+	m.mu.Lock()
+	src, ok := m.sources[id]
+	if !ok {
+		m.mu.Unlock()
+		return errors.New(fmt.Sprintf("source '%s' not found", id))
+	}
+
+	delete(m.sources, id)
+	m.mu.Unlock()
+
+	src.Cancel()
+	<-src.Done
+	return nil
+}

@@ -1,6 +1,7 @@
 package source
 
 import (
+	"context"
 	"time"
 )
 
@@ -28,8 +29,11 @@ type Source struct {
 	Done chan struct{}
 	// Closed when reading goroutine is ready to read.
 	Ready chan struct{}
-	Out   chan Output
-	Err   chan error
+	// Output is sent on this channel.
+	Out chan Output
+	Err chan error
+	// Terminates the execution of this source.
+	Cancel context.CancelFunc
 }
 
 func (src *Source) Send(b []byte) {
