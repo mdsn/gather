@@ -53,7 +53,7 @@ func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 	}
 
 	// Start streaming output into the channel
-	st := stream(rp, src.Out)
+	st := stream(rp, src)
 
 	// Wait out the process in a goroutine
 	go func(grace time.Duration) {
@@ -90,21 +90,21 @@ type ProcStream struct {
 	Stop chan struct{}
 }
 
-func stream(pipe io.ReadCloser, out chan source.Output) *ProcStream {
+func stream(pipe io.ReadCloser, src *source.Source) *ProcStream {
 	st := &ProcStream{
 		Done: make(chan struct{}),
 		Stop: make(chan struct{}),
 	}
 
-	go read(pipe, out, st.Stop, st.Done)
-	go cleanup(pipe, out, st)
+	go read(pipe, src, st)
+	go cleanup(pipe, src.Out, st)
 
 	return st
 }
 
-func read(pipe io.Reader, out chan<- source.Output, stop <-chan struct{}, done chan<- struct{}) {
+func read(pipe io.Reader, src *source.Source, ctl *ProcStream) {
 	// Signal that streaming is done.
-	defer close(done)
+	defer close(ctl.Done)
 
 	rd := bufio.NewReaderSize(pipe, source.MaxLineLength)
 	for {
@@ -118,13 +118,12 @@ func read(pipe io.Reader, out chan<- source.Output, stop <-chan struct{}, done c
 
 			// TODO signal truncation if ErrBufferFull; output can indicate
 			// with ellipsis.
-			// TODO send src.Id here
-			msg := source.Output{CapturedAt: time.Now(), Bytes: cp}
+			msg := source.Output{Id: src.Id, CapturedAt: time.Now(), Bytes: cp}
 
 			// Preempt writing if a Stop signal arrived.
 			select {
-			case out <- msg:
-			case <-stop:
+			case src.Out <- msg:
+			case <-ctl.Stop:
 				return
 			}
 		}
