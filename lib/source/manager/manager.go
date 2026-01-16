@@ -29,6 +29,7 @@ func NewManager() *Manager {
 	return &Manager{
 		inotify: ino,
 		sources: make(map[string]*source.Source),
+		Events:  make(chan source.Output),
 	}
 }
 
