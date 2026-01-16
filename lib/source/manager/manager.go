@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/mdsn/nexus/lib/source"
@@ -49,12 +50,13 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 	case source.KindFile:
 		handle, err := m.inotify.Add(spec.Path)
 		if err != nil {
-			return err
+			return fmt.Errorf("inotify: %v", err)
 		}
 
 		src, err = file.Attach(ctx, spec, handle)
 		if err != nil {
-			return err
+			// XXX clean inotify
+			return fmt.Errorf("attach: %v", err)
 		}
 	default:
 		return errors.New("unknown SourceKind")

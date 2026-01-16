@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/mdsn/nexus/lib/api"
@@ -16,6 +15,8 @@ import (
 )
 
 func main() {
+	printInfo()
+
 	// Set a handler for SIGTERM, SIGINT to cancel the root context.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -23,19 +24,18 @@ func main() {
 	m := manager.NewManager()
 	defer m.Close()
 
-	var wg sync.WaitGroup
-
 	cmdC := make(chan *api.Command)
-	wg.Go(func() { read(cmdC) }) // ctx?
-	wg.Go(func() { execute(ctx, cmdC, m) })
-	wg.Go(func() { drain(ctx, m) })
-	wg.Wait()
+	go read(cmdC)
+	go execute(ctx, cmdC, m)
+	drain(ctx, m)
 }
 
 func read(cmdC chan *api.Command) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
+		// XXX make this read ctx-cancellable?
 		line, err := reader.ReadString('\n')
+
 		if err == io.EOF {
 			// Ignore EOF and any partial line; stdin may be redirected to the
 			// read end of a FIFO, which may produce multiple EOF as writers
@@ -60,7 +60,7 @@ func execute(ctx context.Context, cmdC chan *api.Command, m *manager.Manager) {
 			spec := makeSpec(cmd)
 			err := m.Attach(ctx, spec)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "execute: attach: %v", err)
+				fmt.Fprintf(os.Stderr, "execute: %v\n", err)
 			}
 			// TODO log attach to stderr?
 		case api.CommandKindRm:
@@ -100,4 +100,10 @@ func makeSpec(cmd *api.Command) *source.Spec {
 	}
 
 	return spec
+}
+
+func printInfo() {
+	fmt.Fprintf(os.Stderr, "nx: pid: %d\n", os.Getpid())
+	cwd, _ := os.Getwd()
+	fmt.Fprintf(os.Stderr, "nx: cwd: %s\n", cwd)
 }
