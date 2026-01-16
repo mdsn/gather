@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -16,6 +17,9 @@ import (
 )
 
 func main() {
+	log.SetFlags(0)
+	log.SetPrefix("nx: ")
+
 	printInfo()
 
 	// Set a handler for SIGTERM, SIGINT to cancel the root context.
@@ -50,7 +54,7 @@ func read(cmdC chan *api.Command) {
 		line = strings.TrimSpace(line)
 		cmd, err := api.ParseCommand(line)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "parse: %v", err)
+			log.Printf("parse: %v", err)
 			continue
 		}
 
@@ -65,18 +69,19 @@ func execute(ctx context.Context, cmdC chan *api.Command, m *manager.Manager) {
 			spec := makeSpec(cmd)
 			err := m.Attach(ctx, spec)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "execute: %v\n", err)
+				log.Printf("attach: %v", err)
+			} else {
+				log.Printf("attached source '%s'", cmd.Id)
 			}
-			// TODO log attach to stderr?
 		case api.CommandKindRm:
 			err := m.Remove(cmd.Id)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "execute: %v\n", err)
+				log.Printf("remove: %v", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "nx: removed source '%s'\n", cmd.Id)
+				log.Printf("removed source '%s'", cmd.Id)
 			}
 		default:
-			panic("execute: unknown command kind")
+			log.Fatalln("execute: unknown command kind")
 		}
 	}
 }
@@ -106,14 +111,14 @@ func makeSpec(cmd *api.Command) *source.Spec {
 	case api.CommandTargetProc:
 		spec.Kind = source.KindProc
 	default:
-		panic("makeSpec: unknown command target")
+		log.Fatalln("makeSpec: unknown command target")
 	}
 
 	return spec
 }
 
 func printInfo() {
-	fmt.Fprintf(os.Stderr, "nx: pid: %d\n", os.Getpid())
+	log.Printf("pid %d", os.Getpid())
 	cwd, _ := os.Getwd()
-	fmt.Fprintf(os.Stderr, "nx: cwd: %s\n", cwd)
+	log.Printf("cwd %s", cwd)
 }
