@@ -113,8 +113,8 @@ func read(pipe io.Reader, out chan<- source.Output, stop <-chan struct{}, done c
 
 		n := len(bytes)
 		if n > 0 {
-			cp := make([]byte, n)
-			copy(cp, bytes[:n])
+			cp := make([]byte, n-1) // ReadSlice includes the newline
+			copy(cp, bytes[:n-1])
 
 			// TODO signal truncation if ErrBufferFull; output can indicate
 			// with ellipsis.
