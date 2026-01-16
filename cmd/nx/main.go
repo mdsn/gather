@@ -69,7 +69,12 @@ func execute(ctx context.Context, cmdC chan *api.Command, m *manager.Manager) {
 			}
 			// TODO log attach to stderr?
 		case api.CommandKindRm:
-			// ...
+			err := m.Remove(cmd.Id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "execute: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "nx: removed source '%s'\n", cmd.Id)
+			}
 		default:
 			panic("execute: unknown command kind")
 		}
