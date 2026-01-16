@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/mdsn/nexus/lib/source"
 	"github.com/mdsn/nexus/lib/source/file"
@@ -12,6 +13,9 @@ import (
 
 type Manager struct {
 	inotify *watch.Inotify
+	// Synchronizes access to sources
+	mu      sync.Mutex
+	sources map[string]*source.Source
 }
 
 func NewManager() *Manager {
@@ -19,23 +23,44 @@ func NewManager() *Manager {
 	if err != nil {
 		return nil // XXX ??
 	}
-	return &Manager{inotify: ino}
+	return &Manager{
+		inotify: ino,
+		sources: make(map[string]*source.Source),
+	}
 }
 
 func (m *Manager) Close() error {
 	return m.inotify.Close()
 }
 
-func (m *Manager) Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
+func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
+	var src *source.Source
+	var err error
+
 	switch spec.Kind {
 	case source.KindProc:
-		return proc.Attach(ctx, spec)
+		src, err = proc.Attach(ctx, spec)
+		if err != nil {
+			return err
+		}
+
 	case source.KindFile:
 		handle, err := m.inotify.Add(spec.Path)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return file.Attach(ctx, spec, handle)
+
+		src, err = file.Attach(ctx, spec, handle)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New("unknown SourceKind")
 	}
-	return nil, errors.New("unknown SourceKind")
+
+	m.mu.Lock()
+	m.sources[src.Id] = src
+	m.mu.Unlock()
+
+	return nil
 }

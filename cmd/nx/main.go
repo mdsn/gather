@@ -54,7 +54,12 @@ func execute(ctx context.Context, cmdC chan *api.Command, m *manager.Manager) {
 	for cmd := range cmdC {
 		switch cmd.Kind {
 		case api.CommandKindAdd:
-			// ...
+			spec := makeSpec(cmd)
+			err := m.Attach(ctx, spec)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "execute: attach: %v", err)
+			}
+			// TODO log attach to stderr?
 		case api.CommandKindRm:
 			// ...
 		default:
