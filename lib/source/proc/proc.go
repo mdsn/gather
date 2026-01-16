@@ -118,6 +118,7 @@ func read(pipe io.Reader, out chan<- source.Output, stop <-chan struct{}, done c
 
 			// TODO signal truncation if ErrBufferFull; output can indicate
 			// with ellipsis.
+			// TODO send src.Id here
 			msg := source.Output{CapturedAt: time.Now(), Bytes: cp}
 
 			// Preempt writing if a Stop signal arrived.

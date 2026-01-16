@@ -72,8 +72,15 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 			select {
 			case <-ctx.Done():
 				return
-			case out := <-src.Out:
-				m.Events <- out
+			case out, ok := <-src.Out:
+				if !ok {
+					return
+				}
+				select { // Prevent blocking on the send
+				case m.Events <- out:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
