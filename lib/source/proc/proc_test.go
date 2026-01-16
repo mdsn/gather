@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -18,6 +17,39 @@ func Consume(src *source.Source, outC chan []byte) {
 		out = append(out, msg.Bytes...)
 	}
 	outC <- out
+}
+
+// Consume lines from a source's Out channel into a line channel
+func consume(ctx context.Context, src *source.Source, lineC chan []byte) {
+	defer close(lineC)
+	for out := range src.Out {
+		select {
+		case lineC <- out.Bytes:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Collect lines from a line channel with a timeout
+func collect(lineC chan []byte, deadline time.Duration) [][]byte {
+	timeout := time.NewTimer(deadline)
+	defer timeout.Stop()
+
+	var lines [][]byte
+	for {
+		select {
+		case line, ok := <-lineC:
+			if !ok {
+				return lines
+			}
+			lines = append(lines, line)
+		case <-timeout.C:
+			return lines
+		}
+	}
+
+	return lines
 }
 
 func Map[T any, R any](xs []T, f func(T) R) []R {
@@ -106,12 +138,12 @@ func TestAttachProc_RedirectsStdout(t *testing.T) {
 
 func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 	ctx := t.Context()
-	lines := []string{
-		"O God, what great kindness have we done in times past and forgotten it,",
-		"That thou givest this wonder unto us,",
-		"O God of waters?",
+	lines := [][]byte{
+		[]byte("O God, what great kindness have we done in times past and forgotten it,"),
+		[]byte("That thou givest this wonder unto us,"),
+		[]byte("O God of waters?"),
 	}
-	cmd := fmt.Sprintf("echo '%s'; echo '%s'; echo '%s'", lines[0], lines[1], lines[2])
+	cmd := fmt.Sprintf("echo '%s'; echo '%s'; echo '%s'", string(lines[0]), string(lines[1]), string(lines[2]))
 	spec := NewSpec("pound", "sh", []string{"-c", cmd})
 
 	src, err := Attach(ctx, spec)
@@ -120,18 +152,18 @@ func TestAttachProc_StreamsMultipleLines(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 
-	out := <-outC
-	// Lines are forwarded with newline included; strip them for the test since
-	// the input doesn't have them. `echo` adds them.
-	outLines := Map(
-		slices.Collect(strings.Lines(string(out))),
-		func(s string) string { return strings.TrimRight(s, "\n") },
-	)
+	out := collect(outC, time.Second)
 
-	if !slices.Equal(lines, outLines) {
-		t.Fatalf("outLines: %q, want: %q", outLines, lines)
+	if len(lines) != len(out) {
+		t.Fatalf("out: %q, want: %q", out, lines)
+	}
+
+	for i := range len(out) {
+		if !slices.Equal(out[i], lines[i]) {
+			t.Fatalf("out: %q, want: %q", out, lines)
+		}
 	}
 }
 
@@ -163,7 +195,7 @@ func TestAttachProc_TruncatesLongLine(t *testing.T) {
 
 func TestAttachProc_LastLineNoNewline(t *testing.T) {
 	ctx := t.Context()
-	want := []string{"abc\n", "def\n", "ghi"}
+	want := [][]byte{[]byte("abc"), []byte("def"), []byte("ghi")}
 	spec := NewSpec("newline", "sh", []string{"-c", "echo abc; echo def; echo -n ghi"})
 
 	src, err := Attach(ctx, spec)
@@ -172,12 +204,18 @@ func TestAttachProc_LastLineNoNewline(t *testing.T) {
 	}
 
 	outC := make(chan []byte)
-	go Consume(src, outC)
+	go consume(ctx, src, outC)
 
-	out := <-outC
-	lines := slices.Collect(strings.Lines(string(out)))
-	if !slices.Equal(want, lines) {
+	lines := collect(outC, time.Second)
+
+	if len(lines) != len(want) {
 		t.Fatalf("lines: %q; want: %q", lines, want)
+	}
+
+	for i := range len(lines) {
+		if !slices.Equal(lines[i], want[i]) {
+			t.Fatalf("lines: %q; want: %q", lines, want)
+		}
 	}
 }
 

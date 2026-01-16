@@ -113,8 +113,13 @@ func read(pipe io.Reader, src *source.Source, ctl *ProcStream) {
 
 		n := len(bytes)
 		if n > 0 {
-			cp := make([]byte, n-1) // ReadSlice includes the newline
-			copy(cp, bytes[:n-1])
+			if bytes[n-1] == '\n' {
+				// ReadSlice includes the newline
+				n--
+			}
+
+			cp := make([]byte, n)
+			copy(cp, bytes[:n])
 
 			msg := source.Output{Id: src.Id, CapturedAt: time.Now(), Bytes: cp}
 
