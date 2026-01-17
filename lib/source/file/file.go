@@ -5,9 +5,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/mdsn/nexus/lib/lines"
-	"github.com/mdsn/nexus/lib/source"
-	"github.com/mdsn/nexus/lib/watch"
+	"github.com/mdsn/gather/lib/lines"
+	"github.com/mdsn/gather/lib/source"
+	"github.com/mdsn/gather/lib/watch"
 )
 
 func fileSize(fp *os.File) (int64, error) {

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mdsn/nexus/lib/source"
-	"github.com/mdsn/nexus/lib/watch"
+	"github.com/mdsn/gather/lib/source"
+	"github.com/mdsn/gather/lib/watch"
 )
 
 func MakeSpec(id string) (*os.File, *source.Spec, error) {

@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mdsn/nexus/lib/source"
-	"github.com/mdsn/nexus/lib/source/file"
-	"github.com/mdsn/nexus/lib/source/proc"
-	"github.com/mdsn/nexus/lib/watch"
+	"github.com/mdsn/gather/lib/source"
+	"github.com/mdsn/gather/lib/source/file"
+	"github.com/mdsn/gather/lib/source/proc"
+	"github.com/mdsn/gather/lib/watch"
 )
 
 type Manager struct {

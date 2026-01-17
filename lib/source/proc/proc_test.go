@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mdsn/nexus/lib/source"
+	"github.com/mdsn/gather/lib/source"
 )
 
 // Consume lines from a source's Out channel into a line channel

@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/mdsn/nexus/lib/source"
+	"github.com/mdsn/gather/lib/source"
 )
 
 var (

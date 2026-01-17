@@ -11,14 +11,14 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mdsn/nexus/lib/api"
-	"github.com/mdsn/nexus/lib/source"
-	"github.com/mdsn/nexus/lib/source/manager"
+	"github.com/mdsn/gather/lib/api"
+	"github.com/mdsn/gather/lib/source"
+	"github.com/mdsn/gather/lib/source/manager"
 )
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("nx: ")
+	log.SetPrefix("gather: ")
 
 	printInfo()
 

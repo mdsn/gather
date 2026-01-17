@@ -3,7 +3,7 @@
 GO := go
 GOLINT := golangci-lint
 
-NX := ./cmd/nx
+GATHER := ./cmd/gather
 SOURCE := ./lib/source
 
 BIN := bin
@@ -12,13 +12,13 @@ BIN := bin
 all: build
 
 .PHONY: build
-build: fmt source nx
+build: fmt source gather
 
 source:
 	$(GO) build $(SOURCE)
 
-nx:
-	$(GO) build -o $(BIN)/$@ $(NX)
+gather:
+	$(GO) build -o $(BIN)/$@ $(GATHER)
 
 .PHONY: fmt tidy clean
 fmt:

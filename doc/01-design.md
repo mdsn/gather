@@ -1,23 +1,23 @@
-# Design doc: nexus
+# Design doc: gather
 
-Nexus fans-in multiple line-based sources into one log. The sources may be
+Gather fans-in multiple line-based sources into one log. The sources may be
 files or processes. Sources may be added or removed dynamically without
 interrupting a tailing session.
 
 ## Design approach
 
 The project is implemented as a single Go binary. It receives commands from
-stdin. Nexus understands a simple text based protocol. The API is intentionally
+stdin. Gather understands a simple text based protocol. The API is intentionally
 small; it covers adding and removing each kind of source.
 
 A library implements the functionality to attach to sources and forward their
 output to the main binary.
 
-  cmd/nx                The main binary
+  cmd/gather            The main binary
   lib/source            Library to get output from file and process sources
   lib/api               Command API
 
-### cmd/nx
+### cmd/gather
 
 The binary acts as a coordinator. It receives commands, acts on them to set up
 and tear down sources, and prints output from attached sources. It listens to
@@ -115,21 +115,21 @@ A command handler will dispatch based on `Kind` to concrete functions to handle
 
 These are command examples:
 
-    # Create a fifo to give nx commands
-    $ mkfifo /tmp/nxctl
+    # Create a fifo to give gather commands
+    $ mkfifo /tmp/gatherctl
 
-    # Run nx with its input source
-    $ nx < /tmp/nxctl
+    # Run gather with its input source
+    $ gather < /tmp/gatherctl
 
     # Tail syslog
-    $ echo 'add file syslog /var/log/syslog' > /tmp/nxctl
+    $ echo 'add file syslog /var/log/syslog' > /tmp/gatherctl
 
     # Tail a hypothetical worker
-    $ echo 'add proc emails ./worker --queue=emails' > /tmp/nxctl
+    $ echo 'add proc emails ./worker --queue=emails' > /tmp/gatherctl
 
     # Remove both
-    $ echo 'rm syslog' > /tmp/nxctl
-    $ echo 'rm worker' > /tmp/nxctl
+    $ echo 'rm syslog' > /tmp/gatherctl
+    $ echo 'rm worker' > /tmp/gatherctl
 
 The command is of the form `add <id> <type> <path>`.
 
@@ -144,7 +144,7 @@ Output is split on `\n`; output over some yet undetermined length is truncated.
 
 ## API
 
-Nexus understands a simple API via stdin. These commands constitute the API:
+Gather understands a simple API via stdin. These commands constitute the API:
 
     add file myFile /path/to/file       Start tailing a new file.
     rm myFile                           Stop tailing a file.
@@ -161,13 +161,13 @@ the aggregated log and in `rm` commands.
 ## Scope
 
 There are genuine sources of lines other than files and processes, for example
-named pipes and sockets. Nexus only accepts files and processes.
+named pipes and sockets. Gather only accepts files and processes.
 
 An interactive UI would allow the user to enter commands directly, in the style
-of less or vi. Instead of implementing a full fledged line editor, nexus gets
+of less or vi. Instead of implementing a full fledged line editor, gather gets
 input via stdin. It can be redirected to a FIFO to get input lines from a file.
 
-For process sources, nexus captures stdout and stderr. It logs everything to
+For process sources, gather captures stdout and stderr. It logs everything to
 stdout. When terminating a running process, only the spawned child is
 terminated. The only fireproof way to terminate an entire process tree is to
 run them in a pid namespace, which is out of the scope of this design.
@@ -189,7 +189,7 @@ The user provides a unique identifier for each source they start tailing. The
 
 Processes that write to stdout and stderr have their output aggregated.
 Conceivably, each file descriptor could be identified in the log, or the output
-of nexus itself could be written to stdout/stderr correspondingly, but this is
+of gather itself could be written to stdout/stderr correspondingly, but this is
 the simplest option.
 
 ### Process output
@@ -199,5 +199,5 @@ output and print it headed with the textual id of each source.
 
 ### Tool output
 
-Nexus reserves stdout for the aggregated output of its sources. It prints its
+Gather reserves stdout for the aggregated output of its sources. It prints its
 own output messages to stderr.

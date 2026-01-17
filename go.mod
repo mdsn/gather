@@ -1,4 +1,4 @@
-module github.com/mdsn/nexus
+module github.com/mdsn/gather
 
 go 1.25.4
 
