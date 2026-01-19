@@ -171,6 +171,12 @@ func inotifyReceive(ino *Inotify) {
 
 		// Block for either the inotify or eventfd to be ready.
 		n, err := unix.EpollWait(ino.epfd, epev, -1)
+
+		// SIGKILL or SIGINT interrupted epoll_wait(2).
+		if err == unix.EINTR {
+			return
+		}
+
 		if err != nil {
 			panic(fmt.Sprintf("EpollWait: %v", err))
 		}
