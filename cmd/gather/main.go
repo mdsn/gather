@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"log"
 	"os"
@@ -16,9 +17,33 @@ import (
 	"github.com/mdsn/gather/lib/source/manager"
 )
 
+const SockPath = "/tmp/gather"
+const SockBacklog = 1
+
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("gather: ")
+
+	// Set up a unix domain socket for ctl
+	sfd, err := unix.Socket(unix.AF_UNIX, unix.SOCK_STREAM, 0)
+	if err != nil {
+		log.Fatalf("socket: %v", err)
+	}
+
+	// Create the Sockaddr for the UNIX domain socket
+	addr := unix.SockaddrUnix{Name: SockPath}
+
+	// Bind
+	err = unix.Bind(sfd, &addr)
+	if err != nil {
+		log.Fatalf("bind: %v", err)
+	}
+
+	// Listen
+	err = unix.Listen(sfd, SockBacklog)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
 
 	printInfo()
 
@@ -30,24 +55,36 @@ func main() {
 	defer m.Close()
 
 	cmdC := make(chan *api.Command)
-	go read(cmdC)
+	go read(sfd, cmdC)
 	go execute(ctx, cmdC, m)
 	// XXX call drain() synchronously to use it as a blocking barrier. Since
 	// read() is not context-aware it does not get canceled by the signal setup
 	// above, and the process never exits.
 	drain(ctx, m)
+	log.Println("main: drain returned. goodbye")
 }
 
-func read(cmdC chan *api.Command) {
-	reader := bufio.NewReader(os.Stdin)
+func read(sfd int, cmdC chan *api.Command) {
 	for {
+		cfd, _, err := unix.Accept(sfd)
+		if err != nil {
+			log.Printf("accept: %v", err)
+			return // XXX should signal main() to exit
+		}
+
+		// Wrap conn fd in a go *File
+		cf := os.NewFile(uintptr(cfd), "")
+
+		// XXX should the reader be reused?
+		reader := bufio.NewReader(cf)
+
 		// XXX make this read ctx-cancellable
 		line, err := reader.ReadString('\n')
 
+		// Reader returns an error if input did not end in \n. Ignore any
+		// partial input.
 		if err == io.EOF {
-			// Ignore EOF and any partial line; stdin may be redirected to the
-			// read end of a FIFO, which may produce multiple EOF as writers
-			// open and close it. See 05-input-semantics.
+			cf.Close()
 			continue
 		}
 
@@ -55,9 +92,11 @@ func read(cmdC chan *api.Command) {
 		cmd, err := api.ParseCommand(line)
 		if err != nil {
 			log.Printf("parse: %v", err)
+			cf.Close()
 			continue
 		}
 
+		cf.Close()
 		cmdC <- cmd
 	}
 }

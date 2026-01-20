@@ -1,7 +1,7 @@
 # gather
 
 Gather follows sources of line-based output. It can tail processes or files.
-It's controlled from stdin, so it is easy to write commands to it via a FIFO.
+It's controlled via a UNIX domain socket placed at `/tmp/gather`.
 
 The API is simple. It has two commands: `add` and `rm`. Output is printed to
 stdout, prefixed by the given source id. Application output and errors are
@@ -13,13 +13,10 @@ Lines are truncated at 4k bytes.
 
 Example:
 
-    mkfifo /tmp/gatherctl
-    gather < /tmp/gatherctl
-
-    # Send commands to gather via the FIFO
-    echo 'add file syslog /var/log/syslog' > /tmp/gatherctl
-    echo 'add proc hello echo hello from a process' > /tmp/gatherctl
-    echo 'rm syslog' > /tmp/gatherctl
+    # Send commands to gather with socat via the socket
+    echo 'add file syslog /var/log/syslog' | socat - UNIX-CONNECT:/tmp/gather
+    echo 'add proc hello echo hello from a process' | socat - UNIX-CONNECT:/tmp/gather
+    echo 'rm syslog' | socat - UNIX-CONNECT:/tmp/gather
 
 ## Internals
 
