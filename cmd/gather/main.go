@@ -61,7 +61,6 @@ func main() {
 	// read() is not context-aware it does not get canceled by the signal setup
 	// above, and the process never exits.
 	drain(ctx, m)
-	log.Println("main: drain returned. goodbye")
 }
 
 func read(sfd int, cmdC chan *api.Command) {
@@ -74,8 +73,6 @@ func read(sfd int, cmdC chan *api.Command) {
 
 		// Wrap conn fd in a go *File
 		cf := os.NewFile(uintptr(cfd), "")
-
-		// XXX should the reader be reused?
 		reader := bufio.NewReader(cf)
 
 		// XXX make this read ctx-cancellable

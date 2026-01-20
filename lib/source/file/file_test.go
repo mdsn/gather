@@ -322,6 +322,9 @@ func TestAttachFile_TruncateFile(t *testing.T) {
 	}
 }
 
+// XXX flaky test
+// --- FAIL: TestAttachFile_TruncatePastEOF (0.00s)
+// file_test.go:396: unexpected output: 'dingbatswingding'
 func TestAttachFile_TruncatePastEOF(t *testing.T) {
 	ino, err := watch.NewInotify()
 	if err != nil {
@@ -400,7 +403,8 @@ func TestAttachFile_TruncatePastEOF(t *testing.T) {
 // Test ino.Add -> rm file -> Attach (race situation)
 // Inotify does not open a descriptor to the inode, so (assuming no other
 // process has an open descriptor to it) the OS can destroy it. Attaching will
-// try to open the path and fail.
+// try to open the path and fail. Depending on timing the OS might deliver
+// IN_IGNORED to inotify, due to the file being unlinked.
 func TestAttachFile_RmBeforeAttach(t *testing.T) {
 	ino, err := watch.NewInotify()
 	if err != nil {

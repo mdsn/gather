@@ -3,6 +3,7 @@ package watch
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"unsafe"
@@ -15,11 +16,17 @@ import (
 // unmounted), any pending unread events for that watch descriptor remain
 // available to read.
 
+// See https://lwn.net/Articles/604686/
+// > In addition to the various events for which an application may request
+// > notification, there are certain events for which inotify always generates
+// > automatic notifications. The most notable of these is IN_IGNORED, which is
+// > generated whenever inotify ceases to monitor an object.
+
 const (
 	InotifyBufferSize = 4096
-	// TODO IN_IGNORED can also happen when the os clears a watch due to delete
-	// or unmount. Remove watch when that happens.
-	InotifyMask = unix.IN_MODIFY
+
+	// Specify IN_IGNORED for visibility. The OS delivers it either way.
+	InotifyMask = unix.IN_MODIFY | unix.IN_IGNORED
 )
 
 type Event struct {
@@ -205,10 +212,17 @@ func inotifyReceive(ino *Inotify) {
 			event := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
 			nameOffset := offset + unix.SizeofInotifyEvent
 
+			offset += unix.SizeofInotifyEvent + int(event.Len)
+
 			var name string
 			if event.Len > 0 {
 				raw := buf[nameOffset : nameOffset+int(event.Len)]
 				name = strings.TrimRight(string(raw), "\x00")
+			}
+
+			// Watch removed by the application or kernel.
+			if event.Mask == unix.IN_IGNORED {
+				continue
 			}
 
 			// XXX contention?
@@ -222,8 +236,17 @@ func inotifyReceive(ino *Inotify) {
 				}
 			}
 			ino.mu.Unlock()
-
-			offset += unix.SizeofInotifyEvent + int(event.Len)
 		}
+	}
+}
+
+func printEvent(ev *unix.InotifyEvent) {
+	switch ev.Mask {
+	case unix.IN_MODIFY:
+		log.Println("IN_MODIFY")
+	case unix.IN_IGNORED:
+		log.Println("IN_IGNORED")
+	default:
+		log.Println("different event")
 	}
 }
