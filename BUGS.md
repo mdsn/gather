@@ -1,9 +1,5 @@
 # Known bugs
 
-## Deadlock when running tests with -count 100
-
-Uh oh
-
 ## Lost output when running a subshell
 
     echo 'add proc subshell sh -c "echo one; echo two; echo -n three"' > /tmp/myfifo

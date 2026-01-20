@@ -24,9 +24,7 @@ import (
 
 const (
 	InotifyBufferSize = 4096
-
-	// Specify IN_IGNORED for visibility. The OS delivers it either way.
-	InotifyMask = unix.IN_MODIFY | unix.IN_IGNORED
+	InotifyMask = unix.IN_MODIFY
 )
 
 type Event struct {
