@@ -33,6 +33,9 @@ func main() {
 	// Create the Sockaddr for the UNIX domain socket
 	addr := unix.SockaddrUnix{Name: SockPath}
 
+	// Remove existing socket file, if any, ignoring errors.
+	_ = os.Remove(SockPath)
+
 	// Bind
 	err = unix.Bind(sfd, &addr)
 	if err != nil {
@@ -157,4 +160,5 @@ func printInfo() {
 	log.Printf("pid %d", os.Getpid())
 	cwd, _ := os.Getwd()
 	log.Printf("cwd %s", cwd)
+	log.Printf("socket at %s", SockPath)
 }

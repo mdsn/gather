@@ -24,7 +24,7 @@ import (
 
 const (
 	InotifyBufferSize = 4096
-	InotifyMask = unix.IN_MODIFY
+	InotifyMask       = unix.IN_MODIFY
 )
 
 type Event struct {
