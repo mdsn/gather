@@ -87,13 +87,17 @@ func Attach(ctx context.Context, spec *source.Spec) (*source.Source, error) {
 	return src, nil
 }
 
-type ProcStream struct {
+// Controls for a process Streaming goroutines.
+type StreamCtl struct {
+	// Signals that streaming is done. Owned and closed by the reading
+	// goroutine.
 	Done chan struct{}
+	// Preempts the streaming goroutines and closes the pipe when closed.
 	Stop chan struct{}
 }
 
-func stream(pipe io.ReadCloser, src *source.Source) *ProcStream {
-	st := &ProcStream{
+func stream(pipe io.ReadCloser, src *source.Source) *StreamCtl {
+	st := &StreamCtl{
 		Done: make(chan struct{}),
 		Stop: make(chan struct{}),
 	}
@@ -104,7 +108,7 @@ func stream(pipe io.ReadCloser, src *source.Source) *ProcStream {
 	return st
 }
 
-func read(pipe io.Reader, src *source.Source, ctl *ProcStream) {
+func read(pipe io.Reader, src *source.Source, ctl *StreamCtl) {
 	// Signal that streaming is done.
 	defer close(ctl.Done)
 
@@ -150,7 +154,7 @@ func read(pipe io.Reader, src *source.Source, ctl *ProcStream) {
 }
 
 // Close the pipe and out channel.
-func cleanup(pipe io.Closer, out chan source.Output, st *ProcStream) {
+func cleanup(pipe io.Closer, out chan source.Output, st *StreamCtl) {
 	defer close(out)
 	select {
 	// Streaming goroutine exited on its own. Close the pipe and get out.
