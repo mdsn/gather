@@ -69,6 +69,9 @@ func (m *Manager) Attach(ctx context.Context, spec *source.Spec) error {
 
 	// Fan into the manager's Events channel.
 	go func() {
+		// Remove source, ignoring error
+		defer m.Remove(src.Id)
+
 		for {
 			select {
 			case <-ctx.Done():
